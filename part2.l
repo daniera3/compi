@@ -68,7 +68,7 @@ false {return BOOLFALSE;}
 \'.\' {yylval.string= strdup(yytext);return CHAR_LTL;}
 [+-]?[1-9][0-9]*|[0-9] {yylval.string= strdup(yytext);return DECIMAL_LTL;}
 0(x|X)[0-9A-F]+ {yylval.string= strdup(yytext);return HEX_LTL;}
-[-+]?[0-9]*\.?[0-9]*[eE]?[-+]?[0-9]+ {yylval.string= strdup(yytext);return REAL_LTL;}
+[-+]?[0-9]*[\.]?[0-9]*[eE]?[-+]?[0-9]+ {yylval.string= strdup(yytext);return REAL_LTL;}
 	/*Skip Whitespace, Enter, Tab*/
 [\n] {yylineno++;} //For each line (enter=\n), do yylineo+=1
 [ \t]+ ;

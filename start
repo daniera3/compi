@@ -1,6 +1,6 @@
 #!/bin/bash
 
 lex part2.l
-yacc -d lol.y --debug --verbose 
+yacc -d part2.y --debug --verbose 
 cc -o testfile y.tab.c -Ly -ll 
 ./testfile <trycode.txt

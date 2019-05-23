@@ -52,7 +52,7 @@
 	char * exprtype(node *,code*);
 	Arguments * mkArgs(node *,int *);
 	void addFunc(char * name,Arguments * args,node *returnType,int countArgs,code*);
-	void addvar(Arguments * args,int,int);
+	void addvar(Arguments * args,int,int,code * CODEscope);
 	code* mkcode(char *);
 	node* mknode(char* token, node *left, node *right);
 	void Printtree(node *tree);
@@ -68,6 +68,7 @@
 	char* findfunc(node * tree,code * CODEscope);
 	char *findvar(node * tree,code * CODEscope);
 	Arguments * callfuncargs(code *,node *tree,int * count);
+	int flagMain=false;
 	
 %}
 %union
@@ -87,9 +88,9 @@
 %token <string> MAIN IDENTIFIER SEMICOLON COMMA OPENPAREN CLOSEPAREN OPENBRACKET CLOSEBRACKET OPENBRACE CLOSEBRACE
 %token <string> DECIMAL_LTL HEX_LTL BOOLTRUE BOOLFALSE  REAL REALPTR FUNCTION COLON  DEREFRENCE 
 
+%left EQL NOTEQL LESS LESSEQL GREATEREQL GREATER OR AND
 %left PLUS MINUS RETURN
 %left MULTI DIVISION
-%left EQL NOTEQL LESS LESSEQL GREATEREQL GREATER OR AND
 %left SEMICOLON 
 %right NOT CLOSEBRACE
 
@@ -106,9 +107,10 @@
 %type <node> main program project declears 
 %%
  //Main project
-project: cmmnt program {  syntaxMKscope($2,mycode); printf("syntax valid\n"); }; 
+ 
+project: cmmnt program { syntaxMKscope($2,mycode); }; 
 
-program: procedures main {$$=mknode("CODE",$1,$2);}
+program: procedures main{$$=mknode("CODE",$1,$2);}
 
  //comments
 cmmnt: COMMENT cmmnt {;}| ;
@@ -192,7 +194,7 @@ type_pro: BOOL {$$=mknode("boolean", NULL, NULL);}
 stmnts: stmnts stmnt {$$=mknode("",$1,$2);} | {$$=NULL;};
 
 //stmnt_block
-stmnt_block: stmnt {$$=$1;};
+stmnt_block: stmnt {$$=$1;}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
 
 //new block in stmnts
 new_block: OPENBRACE procedures cmmnt declears stmnts CLOSEBRACE cmmnt
@@ -250,6 +252,7 @@ lhs: IDENTIFIER OPENBRACKET expr CLOSEBRACKET
 	$$=mknode($1, mknode("[",$3,mknode("]",NULL,NULL)), NULL);
 } 
 | IDENTIFIER {$$=mknode($1,NULL,NULL);}
+| address_expr {$$=$1;}
 | derefrence_expr{$$=$1;} ;
 
 
@@ -289,8 +292,8 @@ expr:  OPENPAREN expr CLOSEPAREN {$$=mknode("(",$2,mknode(")",NULL,NULL));}|
 		mknode("|",NULL,NULL));
 	}
 	| IDENTIFIER OPENBRACKET expr CLOSEBRACKET 
-	{$$=mknode($1,mknode("[",$3,mknode("]",NULL,NULL)),NULL);}
-	| IDENTIFIER {$$=mknode($1,NULL,NULL);}
+	{$$=mknode("solovar",mknode($1,mknode("[",$3,mknode("]",NULL,NULL)),NULL),NULL);}
+	| IDENTIFIER {$$=mknode("solovar",mknode($1,NULL,NULL),NULL);}
 	| NULLL {$$=mknode("null",NULL,NULL);};
 
 //address expression like &id
@@ -330,9 +333,17 @@ call_func: IDENTIFIER paren_expr {$$=mknode("Call func",mknode($1,NULL,NULL),mkn
 
 int main()
 {
-	int  x = yyparse();
+	int x= yyparse();
+	if(x==0)
+	{
+	printf("syntax valid\n"); 
 	printf("Semantics valid\n");
-	return x;	
+	}
+	return x;
+	
+
+	
+	
 }
 Arguments * callfuncargs(code * CODEscope,node *tree,int * count)
 {
@@ -366,7 +377,7 @@ char* findfunc(node * tree,code * CODEscope)
 			find=true;
 			flag=true;
 			int count=0;
-			args=callfuncargs(temp,tree->right->left,&count);
+			args=callfuncargs(CODEscope,tree->right->left,&count);
 			//printf("%d %d ",count,temp->func[i]->countArgs);
 			if(count==temp->func[i]->countArgs)
 			{
@@ -382,7 +393,7 @@ char* findfunc(node * tree,code * CODEscope)
 		}
 		temp=temp->beforeLVL;
 	}
-	printf("ERORR,func %s not find\n",tree->left->token);
+	printf("ERORR,func %s not find call in scope %s in func/proc %s\n",tree->left->token,CODEscope->name,mycode->func[mycode->countfunc-1]->name);
 	if(find==true)
 		printf("but find func with some name but other args\n");
 		exit(1);
@@ -390,6 +401,8 @@ char* findfunc(node * tree,code * CODEscope)
 char *findvar(node * tree,code * CODEscope)
 {
 	code*temp=CODEscope;
+	if(strcmp(tree->token,"solovar")==0)
+		tree=tree->left;
 	while(temp!=NULL)
 	{
 		for(int i=0;i<temp->countvar;i++)
@@ -398,19 +411,19 @@ char *findvar(node * tree,code * CODEscope)
 			
 			if(tree->left!=NULL && strcmp(tree->left->token,"[")==0)
 			{
-				if(strcmp(temp->var[i].type,"string"))
-					if(strcmp(exprtype(tree->left->left,CODEscope),"int"))
+				if(strcmp(temp->var[i].type,"string")==0)
+					if(strcmp(exprtype(tree->left->left,CODEscope),"int")==0)
 					{
 						return "char";
 					}
 					else
 					{
-						printf("ERORR, index in string can be only int (<string>[<int>])\n");
+						printf("ERORR, index in string can be only int (<string>[<int>])in scope %s in func/proc %s\n",CODEscope->name,mycode->func[mycode->countfunc-1]->name);
 						exit(1);
 					}
 				else
 				{
-					printf("ERORR,you can use index only on string type (<string>[<int>])\n");
+					printf("ERORR,you can use index only on string type (<string>[<int>]) in scope %s in func/proc %s\n",CODEscope->name,mycode->func[mycode->countfunc-1]->name);
 					exit(1);
 				}
 
@@ -421,8 +434,9 @@ char *findvar(node * tree,code * CODEscope)
 		}
 		temp=temp->beforeLVL;
 	}
-	printf("ERORR,var %s not find in scope %s\n ",tree->token,CODEscope->name);
+	printf("ERORR,var %s not find in scope %s in func/proc %s\n ",tree->token,CODEscope->name,mycode->func[mycode->countfunc-1]->name);
 	exit(1);
+	
 }
 char * exprtype(node * tree,code* CODEscope){
 	char* msg=(char*)malloc(sizeof(char)*7);
@@ -454,7 +468,7 @@ char * exprtype(node * tree,code* CODEscope){
 		if(strcmp(exprtype(tree->left,CODEscope),"string")==0)
 		msg="int";
 		else{
-			printf("Erorr op | you can use only on string type");
+			printf("Erorr op | you can use only on string type in func/proc %s",mycode->func[mycode->countfunc-1]->name);
 			exit(1);
 		}
 		if(strcmp(tree->token,"==")==0||strcmp(tree->token,"!=")==0)
@@ -462,7 +476,7 @@ char * exprtype(node * tree,code* CODEscope){
 			if(strcmp(exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope))==0&&strcmp(exprtype(tree->right,CODEscope),"string")!=0)
 			msg="boolean";
 			else{
-				printf("ERORR, you cant do %s between %s and %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope));
+				printf("ERORR, you cant do %s between %s and %s in func/proc %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope),mycode->func[mycode->countfunc-1]->name);
 				exit(1);
 			}
 		}
@@ -472,7 +486,7 @@ char * exprtype(node * tree,code* CODEscope){
 			if((strcmp(exprtype(tree->left,CODEscope),"int")==0||strcmp(exprtype(tree->left,CODEscope),"real")==0)&&(strcmp(exprtype(tree->right,CODEscope),"int")==0||strcmp(exprtype(tree->right,CODEscope),"real")==0))
 			msg="boolean";
 			else{
-				printf("ERORR, you cant do %s between %s and %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope));
+				printf("ERORR, you cant do %s between %s and %s in func/proc %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope),mycode->func[mycode->countfunc-1]->name);
 				exit(1);
 			}
 		}
@@ -483,7 +497,7 @@ char * exprtype(node * tree,code* CODEscope){
 			if(strcmp(exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope))==0&&strcmp(exprtype(tree->right,CODEscope),"boolean")==0)
 			msg="boolean";
 			else{
-				printf("ERORR, you cant do %s between %s and %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope));
+				printf("ERORR, you cant do %s between %s and %s in func/proc %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope),mycode->func[mycode->countfunc-1]->name);
 				exit(1);
 			}
 			
@@ -504,7 +518,7 @@ char * exprtype(node * tree,code* CODEscope){
 			}
 			else if(strcmp(msg,"")==0)
 			{
-				printf("ERORR, you cant do %s between %s and %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope));
+				printf("ERORR, you cant do %s between %s and %s in func/proc %s\n",tree->token,exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope),mycode->func[mycode->countfunc-1]->name);
 				exit(1);
 			}
 
@@ -610,13 +624,12 @@ code* mkcode(char* name)
 }
 
 
-void addvar(Arguments * args,int countvars,int isArg){
+void addvar(Arguments * args,int countvars,int isArg,code * CODEscope){
 	if(countvars==0)
 	return;
 	Varaiable* temp;
-	code * codey=mycode;
-	while(codey->nextLVL!=NULL)
-		codey=codey->nextLVL;
+	code * codey=CODEscope;
+
 	for(int i=0;i<countvars;i++)
 		for(int j=0;j<countvars;j++)
 	if(i!=j && strcmp(args[j].name,args[i].name)==0 )
@@ -811,7 +824,7 @@ node* mknode (char *token, node *left, node *right)
 void printTabs(int n)
 {
 	int i;
-	for(i=0;i<n/8;i++)
+	for(i=0;i<n/9;i++)
 		printf(" ");
 }
 void Printtree(node* tree)
@@ -920,6 +933,7 @@ void Printtree(node* tree)
 	else if(strcmp(tree->token, "") == 0||strcmp(tree->token, "BOOLEAN") == 0||strcmp(tree->token, "STRING") == 0||strcmp(tree->token, "REAL") == 0||strcmp(tree->token, "CHAR") == 0||strcmp(tree->token, "INT") == 0||strcmp(tree->token, "HEX") == 0);
 	else if(strcmp(tree->token, "(") == 0)
 			printf("(");
+		else if(strcmp(tree->token, "solovar") == 0 );
 	else if(strcmp(tree->token, "\n") == 0)
 			printf("\n");
 	else if(strcmp(tree->token, ")") == 0)
@@ -1016,7 +1030,7 @@ void syntaxMKscope(node *tree,code * CODEscope){
 		if(!(strcmp(exprtype(tree->right,CODEscope),"NULL")==0&& (strcmp(exprtype(tree->left,CODEscope),"real*")==0||strcmp(exprtype(tree->left,CODEscope),"int*")==0||strcmp(exprtype(tree->left,CODEscope),"char*")==0)))
 		if(strcmp(exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope))!=0)
 		{
-			printf("ERORR, you can't do = between %s and %s in scope %s\n",exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope),CODEscope->name);
+			printf("ERORR, you can't do = between %s and %s in scope %s in func/proc %s\n",exprtype(tree->left,CODEscope),exprtype(tree->right,CODEscope),CODEscope->name,mycode->func[mycode->countfunc-1]->name);
 			exit(1);
 		}
 	}
@@ -1024,7 +1038,7 @@ void syntaxMKscope(node *tree,code * CODEscope){
 	{
 		int countvar=0;
 		Arguments * var=mkArgs(tree,&countvar);
-		addvar(var,countvar,0);
+		addvar(var,countvar,0,CODEscope);
 		
 		
 	}
@@ -1076,17 +1090,22 @@ void syntaxMKscope(node *tree,code * CODEscope){
 	}
 			else if(strcmp(tree->token, "for") == 0)
 	{
+
 	 if(strcmp(exprtype(tree->left->left->right,CODEscope),"boolean")!=0)
 		{
 			printf("ERORR, in for expr most be type boolean\n");
 			exit(1);
 		}
+
 		syntaxMKscope(tree->left->left->left,CODEscope);
+
 		syntaxMKscope(tree->left->right->left,CODEscope);
 
 		if(strcmp(tree->right->token,"{")!=0)
 		{
+
 			push(CODEscope,tree->token);
+
 			if (tree->left) 
 				syntaxMKscope(tree->left,lestcode( CODEscope->nextLVL));
 	
@@ -1095,7 +1114,7 @@ void syntaxMKscope(node *tree,code * CODEscope){
         	scope--;
 			return;
 		}
-		
+
 		
 		
 	}
@@ -1105,7 +1124,7 @@ void syntaxMKscope(node *tree,code * CODEscope){
 		Arguments * arg=mkArgs(tree->left->right->left,&count);
 		addFunc(tree->left->token,arg,tree->left->right->right->left,count,CODEscope);
 		push(CODEscope,tree->token);
-		addvar(arg,count,1);
+		addvar(arg,count,1,lestcode(CODEscope));
 	if (tree->left) 
 		syntaxMKscope(tree->left,lestcode( CODEscope->nextLVL));
 	
@@ -1126,7 +1145,7 @@ void syntaxMKscope(node *tree,code * CODEscope){
 		Arguments * arg=mkArgs(tree->right->left,&count);
 		addFunc(tree->left->token,arg,NULL,count,CODEscope);
 		push(CODEscope,tree->token);
-		addvar(arg,count,1);
+		addvar(arg,count,1,lestcode(CODEscope));
 	if (tree->left) 
 		syntaxMKscope(tree->left,lestcode( CODEscope->nextLVL));
 	
@@ -1163,6 +1182,12 @@ void syntaxMKscope(node *tree,code * CODEscope){
     }
     else if(strcmp(tree->token, "Main") == 0)
 	{
+		if(flagMain==true && strcmp(CODEscope->name,"CODE")==0)
+		{
+			printf("Main needs to be one anad only and not inside a func/proc\n");
+			exit(1);
+		}
+		flagMain=true;
 		addFunc(tree->token,NULL,NULL,0,CODEscope);
 		push(CODEscope,tree->token);
 
@@ -1283,6 +1308,10 @@ strcmp(tree->token, ",") == 0 )
 			//printf("(%s",tree->token);
 				
 				
+	}
+	else if(strcmp(tree->token, "solovar") == 0 )
+	{
+		findvar(tree->left,CODEscope);
 	}
 	if (tree->left) 
 		syntaxMKscope(tree->left,CODEscope);
