@@ -4,8 +4,7 @@
 	#include <string.h>
 	#include "lex.yy.c"
 
-	#define false 0
-	#define true 1
+	typedef enum {false,true}bool;
 	typedef struct node
 	{
 		char *token;
@@ -65,10 +64,19 @@
 	code* lestcode(code * codey);
 	static int scope=0;
 	void syntaxMKscope(node *tree,code * scope);
-	char* findfunc(node * tree,code * CODEscope);
+	char* findfunc(node * tree,code * CODEscope,int* count);
 	char *findvar(node * tree,code * CODEscope);
 	Arguments * callfuncargs(code *,node *tree,int * count);
 	int flagMain=false;
+
+	//part 3
+	int POPParams(Arguments * args,int count);
+	static int t=0;
+	static int l=0;
+
+
+
+	
 	
 %}
 %union
@@ -88,10 +96,10 @@
 %token <string> MAIN IDENTIFIER SEMICOLON COMMA OPENPAREN CLOSEPAREN OPENBRACKET CLOSEBRACKET OPENBRACE CLOSEBRACE
 %token <string> DECIMAL_LTL HEX_LTL BOOLTRUE BOOLFALSE  REAL REALPTR FUNCTION COLON  DEREFRENCE 
 
-%left EQL NOTEQL LESS LESSEQL GREATEREQL GREATER OR AND
+%left  NOTEQL LESS LESSEQL GREATEREQL GREATER OR AND
 %left PLUS MINUS RETURN
 %left MULTI DIVISION
-%left SEMICOLON 
+%left SEMICOLON EQL
 %right NOT CLOSEBRACE
 
 %nonassoc IDENTIFIER 
@@ -116,9 +124,9 @@ program: procedures main{$$=mknode("CODE",$1,$2);}
 cmmnt: COMMENT cmmnt {;}| ;
 
  //this is the main
-main: PROCEDUR MAIN OPENPAREN CLOSEPAREN OPENBRACE pro_body CLOSEBRACE
+main: PROCEDUR MAIN OPENPAREN CLOSEPAREN cmmnt OPENBRACE pro_body CLOSEBRACE
 {
-$$=mknode("Main",mknode("ARGS",NULL,$6),NULL);
+$$=mknode("Main",mknode("ARGS",NULL,$7),NULL);
 };
 
 //functions
@@ -364,7 +372,7 @@ Arguments * callfuncargs(code * CODEscope,node *tree,int * count)
 		arr[i].type=ar[i].type;
 	return arr;
 }
-char* findfunc(node * tree,code * CODEscope)
+char* findfunc(node * tree,code * CODEscope,int * countParams)
 {
 	code*temp=CODEscope;
 	Arguments* args;
@@ -381,14 +389,17 @@ char* findfunc(node * tree,code * CODEscope)
 			//printf("%d %d ",count,temp->func[i]->countArgs);
 			if(count==temp->func[i]->countArgs)
 			{
-				for(int j=0;j<count;j++)
+				for(int j=0,t=count-1;j<count;j++,t--)
 				{
-					//printf("%s %s",args[j].type,temp->func[i]->args->type);
-					if(strcmp(args[j].type,temp->func[i]->args->type)!=0)
+					//printf("%s %s %s",args[j].type,temp->func[i]->args[t].type, temp->func[i]->args[t].name);
+					if(strcmp(args[j].type,temp->func[i]->args[t].type)!=0)
 						flag=false;
 				}
-				if(flag==true)
+				if(flag==true){
+					if(countParams!= NULL)
+						*countParams = POPParams(args,count);
 					return temp->func[i]->returnType;
+				}
 			}
 		}
 		temp=temp->beforeLVL;
@@ -585,7 +596,7 @@ char * exprtype(node * tree,code* CODEscope){
 		if(strcmp(tree->token,"(")==0)
 			msg=exprtype(tree->left,CODEscope);
 		if(strcmp(tree->token,"Call func")==0)
-			msg=findfunc(tree,CODEscope);
+			msg=findfunc(tree,CODEscope,NULL);
 		
 	}
 	if(strcmp(msg,"")==0)
@@ -1123,6 +1134,8 @@ void syntaxMKscope(node *tree,code * CODEscope){
         int count=0;
 		Arguments * arg=mkArgs(tree->left->right->left,&count);
 		addFunc(tree->left->token,arg,tree->left->right->right->left,count,CODEscope);
+		printf("%s:\n",tree->left->token);
+		printf("\tBeginFunc‬‬\n");
 		push(CODEscope,tree->token);
 		addvar(arg,count,1,lestcode(CODEscope));
 	if (tree->left) 
@@ -1144,6 +1157,10 @@ void syntaxMKscope(node *tree,code * CODEscope){
         int count=0;
 		Arguments * arg=mkArgs(tree->right->left,&count);
 		addFunc(tree->left->token,arg,NULL,count,CODEscope);
+
+		printf("%s:\n",tree->left->token);
+		printf("\tBeginFunc‬‬\n");
+
 		push(CODEscope,tree->token);
 		addvar(arg,count,1,lestcode(CODEscope));
 	if (tree->left) 
@@ -1157,8 +1174,11 @@ void syntaxMKscope(node *tree,code * CODEscope){
 
 	else if(strcmp(tree->token, "Call func") == 0)
 	{
-		findfunc(tree,CODEscope);
-		//printf("(%s \n",tree->token);
+		int count=0;
+		findfunc(tree,CODEscope,&count);
+		printf("\tt%d = CALL _%s\n",t++,tree->left->token);
+		printf("\t‫‪PopParams‬‬‬‬ %d\n",count);
+
 		
 		
 	}
@@ -1319,4 +1339,28 @@ strcmp(tree->token, ",") == 0 )
 	if (tree->right)
 		syntaxMKscope(tree->right,CODEscope);
 
+}
+
+int POPParams(Arguments * args,int count){
+	int size=0;
+	for(int i =0;i<count;i++)
+	{
+		if(strcmp(args[i].type,"int")==0)
+			size += 4;
+		else if(strcmp(args[i].type,"char")==0)
+			size += 1;
+		else if(strcmp(args[i].type,"real")==0)
+			size += 8;
+		else if(strcmp(args[i].type,"string")==0)
+			size += atoi(args[i].len);
+		else if(strcmp(args[i].type,"boolean")==0)
+			size += 4;
+		else if(strcmp(args[i].type,"int*")==0)
+			size += 4;
+		else if(strcmp(args[i].type,"char*")==0)
+			size += 4;
+		else if(strcmp(args[i].type,"real*")==0)
+			size += 4;
+	}
+	return size;
 }

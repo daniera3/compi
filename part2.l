@@ -1,3 +1,5 @@
+%x C_COMMENT
+
 /*Scanner-file*/
 %{
 #include<stdio.h>
@@ -57,7 +59,10 @@ Main {yylval.string= strdup(yytext);return MAIN;}
 "[" {return OPENBRACKET;}
 "]" {return CLOSEBRACKET;}
  
- "/""%".*"%""/" {return COMMENT;}
+"/%"            { BEGIN(C_COMMENT); }
+<C_COMMENT>"%/" { BEGIN(INITIAL); }
+<C_COMMENT>\n   yylineno++;
+<C_COMMENT>.   ;
 
   /*Literl*/
 return {return RETURN;}
