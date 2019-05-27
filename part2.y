@@ -84,6 +84,7 @@
 	char* freshLabel();
 	char* gen(node*,char*,char*,char*,char*,char*);
 	char* mystrcat(char*des,char*src);
+	char* mystrcat2(char*des,char*src);
 	char *replaceWord(const char *s, const char *oldW, const char *newW);
 	char * mkspace(char *label);
 	static int t=0;
@@ -134,7 +135,7 @@
  
 project: cmmnt program {firstNode =$2; syntaxMKscope($2,mycode);  }; 
 
-program: procedures main{$$=mknode("CODE",$1,$2);  addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);}
+program: procedures main{$$=mknode("CODE",$1,$2);  addCode($$,mystrcat2($1->code,$2->code),NULL,NULL,NULL,NULL);}
 
  //comments
 cmmnt: COMMENT cmmnt {;}| ;
@@ -144,23 +145,23 @@ main: PROCEDUR MAIN OPENPAREN CLOSEPAREN cmmnt OPENBRACE pro_body CLOSEBRACE
 {
 $$=mknode("Main",mknode("ARGS",NULL,$7),NULL);
 t=l=0;
-addCode($$,mystrcat("Main:\n",$7->code),NULL,NULL,NULL,NULL);
+addCode($$,mystrcat2("Main:\n",$7->code),NULL,NULL,NULL,NULL);
 };
 
 //functions
-procedures: procedures  procedure {$$=mknode("",$1,$2);if($1!=NULL) addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);else addCode($$,$2->code,NULL,NULL,NULL,NULL);}
+procedures: procedures  procedure {$$=mknode("",$1,$2);if($1!=NULL) addCode($$,mystrcat2($1->code,$2->code),NULL,NULL,NULL,NULL);else addCode($$,$2->code,NULL,NULL,NULL,NULL);}
 	| {$$=NULL;};
 
 //function
 procedure: FUNCTION IDENTIFIER OPENPAREN para_pro CLOSEPAREN cmmnt RETURN type_pro  OPENBRACE  pro_body CLOSEBRACE
 { 
 		$$=mknode("FUNC",mknode($2,mknode(" ",NULL,NULL),mknode("ARGS",$4,mknode("Return",$8,NULL))),mknode("",$10,NULL));
-		t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat(x,$10->code),NULL,NULL,NULL,NULL);
+		t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat2(x,$10->code),NULL,NULL,NULL,NULL);
 }
 | PROCEDUR IDENTIFIER OPENPAREN para_pro CLOSEPAREN  OPENBRACE  pro_body CLOSEBRACE
 {
 	$$=mknode("PROC",mknode($2,mknode("",NULL,NULL),NULL),mknode("ARGS",$4,$7));
-	t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat(x,$7->code),NULL,NULL,NULL,NULL);
+	t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat2(x,$7->code),NULL,NULL,NULL,NULL);
 };
 
 
@@ -177,7 +178,7 @@ para_list: var_id COLON type_id {$$=mknode("(",$3,mknode("",$1,mknode(")",NULL,N
 pro_body: cmmnt  procedures declears stmnts 
 {
 	$$=mknode("BODY", mknode(" ",$2,NULL),mknode(" ",$3,mknode(" ",$4,mknode(" ",NULL,NULL))));
-	addCode($$,mystrcat("\tBeginFunc‬‬\n",$4->code),NULL,NULL,NULL,NULL);
+	addCode($$,mystrcat2("\tBeginFunc‬‬\n",$4->code),NULL,NULL,NULL,NULL);
 };
 
 
@@ -272,7 +273,7 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 assmnt_stmnt: lhs ASSINGMENT expr 
 {
 	$$=mknode("=",$1,$3);
-	addCode($$,mystrcat($3->code,gen($$,$1->var,"=",$3->var,"","")),NULL,NULL,NULL,NULL);
+	addCode($$,mystrcat($3->code,gen($$,mystrcat($1->var,""),"=",$3->var,"","")),NULL,NULL,NULL,NULL);
 };
 
 
@@ -1478,7 +1479,27 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		}
 		return des;
 	}
-
+char* mystrcat2(char*des,char*src){
+		char* tamp=des;
+		char* num;
+		asprintf(&num,"%d ",line++);
+		if(src!=NULL){
+			if(des==NULL){
+				des=(char*)malloc((strlen(src)+1)*sizeof(char));
+				strcpy(des,src);
+				return des;
+			}
+		des=(char*)malloc((strlen(des)+strlen(src)+1+strlen(num))*sizeof(char));
+		if(tamp!=NULL){
+		strcat(des,tamp);
+		}
+		if(src!=NULL)
+		{
+		strcat(des,src);
+		}
+		}
+		return des;
+	}
 char *replaceWord(const char *s, const char *oldW, const char *newW) 
 { 
     char *result; 
