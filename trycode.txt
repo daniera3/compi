@@ -1,213 +1,133 @@
-func foo() return int 
-{ 
-   var x : char*;    /% x is a pointer to a character variable %/
-   var x1, z : int;
-   var y    : char*; 
-   var i : int;
-   var m, n : bool;
-   var c : char; 
-   var r: real;
-   var s : string[20];
-   var a, b : string[100]; 
-   var l: int;
-   s="this is a string" ;     /% : simple string that contains 16 character %/
-   a="this is no newline\n";  /% : string that contains 20 characters, including a backslash and a lowercase n%/
-   b = "" ;                     /% : empty strings are okay %/
-   y = null;   /% y is now the NULL pointer %/ 
-   r=3.14;
-   r=-34.9988;
-   r=45.3E-23;
-   r=-4E+2101;
-   r= +.2E4;
-   r=  4.e-67; 
-   c = 'x';
-   x = &c; 
-   y = x;     /% We take the address of x and assign it to y. As a result, y points to x, which is 5. %/
 
- /% this is my comment %/	
-    c = 'e';
-    a = "test";   /% basically equivalent to a[0] = 't'; a[1] = 'e'; a[2] = 's'; a[3] = 't'; a[4] = '\0'; %/  
-    i = |s|;      /% this assigns 100 to variable i, since the length operator returns the size of the character array %/ 
-      b = a;
-    /% a[19] = 'f'; a[4+2] = 'g'; b[3] = c; TODO %/
-     return 0;
-}  
+/%sadasdasd
+asdasd
+asdasd
+%/
+func foo1(a, b, y : int; c: char) return bool
+{
+	var res : bool;
+	{
+		var x, b : char;
+		var y: int;
 
-   
-  
-func ree(i, j, k : int) return int 
-{ 
-    func fee2(l, m, n : int) return int 
-    { 
+		b = '&';
+		/% a = x; %/ 
+		/% b = 8; %/
+		a = (y * 7)/a-y;
+		/% a = (y * 7)/b-y; %/
+		/% a = (y * 7)/a-c; %/
 
-        func fee3(l, m, n : int) return char 
-        { 
-
-        return 'c'; 
-            
-        }   
- 
-        if(1==1) { 
-
-            return 5 - 5;
-            
-        }  
-        return 3; 
-    }   
-	return 0; 
-} 
-  
-proc goo(i, j, k : int) 
-{ 
-    func fee(l, m, n : int) return bool 
-    { 
-        return true; 
-    }  	
-} 
+		res = (b == c) && (y > a);
+		/% res = (b == c) && (y + a); %/
+		/% 3 + 6 = 9; %/
+		/% ^x = 6; %/
+	}
+    	return res ;
+}
 
 
-
-func fee0(l, m, n : int) return bool 
-{ 
-    
-    proc goo(i, j, k : int) 
-    { 
-
+proc fee1(i, j, k, x : int)
+{
+    func fee2(l, m, n : int) return bool
+    {
+	var x, j: bool;
+	/% var n: bool; %/
+	var k: char;
+	k = '@';
+	i = l + l;
+	/% i = j + 1; %/
+	/% i = k + 1; %/
+	if ((k == '*') || (x != false) && (l + m < i)){
+		x = l < m;
+	}
+        return x;
     }
-    return true; 
-}  	
+    {
+	var x : char;
+	var k: bool;
+	k = fee2(5,i,j);
+	/% x = fee2(5,i,j); %/
+	/% k = fee2(5,i); %/
+	/% k = fee2(5,x,j); %/
+     }
+    /% n = false; %/
+    /% x = '#';	%/
+    x = k;
+}
 
 
-
-func foo2() return int {return 0; } 
-func f234() return int { return 0;} 
-
-func foo3(i, j, k ,a : int; l, m, n : bool) return int { return 0; } 
-proc fee(a, b : int)  { } 
-func fei(a, b, c : int; d, e, f : bool; g, h : int) return int { return 0; } 
-
-
-func foo5() return int 
-{ 
-    { 
-        {
-            proc lol(){}
-        }   /% empty code blocks are okay, although not very useful %/ 
-    }     return 0; 
-    
-} 
-
-func foo_3(i, j, k : int) return int 
-{  
-    
-    func square(t : int) /% func/proc declarations %/ return int 
-    { 
-        var temp : int;  
-        var total : int;    /% variable declarations %/ 
-		temp = t*t; 
-        if(3 > 2) 
-         {  
-		      /%...statements...%/ 
-           i = 5; /% i has been declared above%/ 
-		 }
-     
-		if(!false || true ) {
-          j = 3; 
-        } else { k = 4; } 
-        while(true) {
-         /% l = 2; k = l + j; TODO %/
-		}
-		if((3+4)/3-5*2==5) i = 5; 
-        if(true) { j = 3; } else x = x - 1; 
-        while(false) x = x + 1; 
-        for(i=0;i<50;i=i+ 1) y=i; 	
-        foo();
-		a = foo();
-		return foo_3(999,888,345); 
+func foo3(i, j, k : int) return int
+{
+    func square(t : int) /% function declarations %/ return int
+    {
+        var temp : int;
+        temp = t * t;
+        return temp;
     }
-    var do1 :char; 
-    do1=square(1);
-    total = 1;                    /% statements %/   
-	return 0; 
-} 
-func foo4() return int 
-{ 
-    var x : int;    
-	{        
-	  var y : int;        
-        x = 1;   
- 	    y = 2; 
-	    {
-			 x = 2;   
-		}  
-		y = 3;    
-    }   
-	fee(x,y);
-	return 0; 
-}  
+
+    var total : int;                       /% variable declarations %/
+    var bo : bool;
+    bo = foo1(i,j,k,'^');
+    /% j = foo2(); %/
+    total = square(i+j+k);                    /% statements %/
+    return total;
+}
 
 
-   
-  
- 
- 
+func foo2() return int
+{
+    var s1, s2: string[100];
+    var i, j, cnt: int;
+    i=0;
+    j=0;
+    cnt = 1;
+    while(i<|s1|){
+	while(j<|s2|/2){
+	    if (s1[i] == s2[j]){
+		cnt = cnt*2;
+	    }
+	    j=j + 1;
+	}
+	i=i + 1;
+    }
+    return cnt;
+}
 
-func moo() return int { 
- var x : int;
- var y1 : int*;
- var x1 : char*;
- var y : string[10]; 
- var z : char;
-  y = "foobar"; 
-  x = 5; 
- y = &x; 
- x = 6; 
- x= &y[5];          /% x points to 'r' %/ 
- z = ^(x - 5);       /% z is 'f' %/ 
- y= "barfoo";       /% z is still 'f', but x now points to 'o' %/ 
- return 0;
+
+func foo4() return int
+{
+    {   
+	var x : int;
+	var y : int*;
+	x = 5;
+	y = &x;
+	x = 6;
+	if (&x == y && ^y == x){
+		^y = 9;
+	}
+     	{
+		var x : char*;
+		var y : string[10];
+		var z : char;
+		y = "foobar";
+		x = &y[5];         
+		z = ^(x - 5);       
+		y = "barfoo"; 
+   		{
+			var x : char;
+			var y : int*;
+			var z : char*;
+			var g : char;
+    		}
+	}
+     }
+    return 0;
 }
 
 
 
-func foo_2() return int { 
-  var y: int;
-  var x: int;
-   x = 2;
-    if(x>y) { 
-      x=3;
-	  x=x+ 1;
-    }  
-    if( x<y ) x=0;  
-    if (x!=y ) 
-    {  
-      y = 2;
-      x=x+ 2;
-    } 
-    else{ 
-       y = 2;
-      x=x+ 2;
-    }
-    if (x!=y )  y = 2;else x=x+ 2;
-  
-    return x; 
- } 
-
-
- 
-func foo_5() return int { if (true) { } return 0; } 
-
-
 proc Main()
- {  
-   var a : int;
-   while (x==y) { y=y*2; x = x + 2; }
-   while (x>y) y=y*2; 
- 
-   for(i=0;i<50; i = i + 1)  
-   { 
-      y=i ;
-      x = x + 2;
-   }  
-  
-} 
+{
+    var a : int;
+    a = foo2();
+}
