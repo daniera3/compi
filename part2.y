@@ -84,9 +84,11 @@
 	char* freshLabel();
 	char* gen(node*,char*,char*,char*,char*,char*);
 	char* mystrcat(char*des,char*src);
+	char *replaceWord(const char *s, const char *oldW, const char *newW);
+	char * mkspace(char *label);
 	static int t=0;
 	static int l=0;
-
+	static int line=0;
 
 
 	
@@ -130,7 +132,7 @@
 %%
  //Main project
  
-project: cmmnt program { syntaxMKscope($2,mycode); firstNode=$2; }; 
+project: cmmnt program {firstNode =$2; syntaxMKscope($2,mycode);  }; 
 
 program: procedures main{$$=mknode("CODE",$1,$2);  addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);}
 
@@ -260,7 +262,7 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 }
 | assmnt_stmnt SEMICOLON cmmnt {$$=mknode("",$1,NULL); addCode($$,$1->code,NULL,NULL,NULL,NULL); }
 | expr SEMICOLON cmmnt {$$=$1;}
-| RETURN expr SEMICOLON cmmnt {$$=mknode("return",$2,NULL);}
+| RETURN expr SEMICOLON cmmnt {$$=mknode("return",$2,NULL);addCode($$,mystrcat($2->code,gen($$,"return",$2->var,"","","")),NULL,NULL,NULL,NULL);}
 | new_block {$$=$1;};
 
 
@@ -307,7 +309,7 @@ expr:  OPENPAREN expr CLOSEPAREN {$$=mknode("(",$2,mknode(")",NULL,NULL));addCod
 	| NOT expr {$$=mknode("!",$2,NULL);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat($2->code,gen($$,$$->var,"=","!",$2->var,"")),NULL,NULL,NULL,NULL);}
 	| address_expr {$$=$1;}
 	| derefrence_expr {$$=$1;}
-	| call_func cmmnt {$$=$1;addCode($$,NULL,freshVar(),NULL,NULL,NULL);}
+	| call_func cmmnt {$$=$1;}
 	| DECIMAL_LTL {$$=mknode($1,mknode("INT",NULL,NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
 	| HEX_LTL {$$=mknode($1,mknode("HEX", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
 	| CHAR_LTL {$$=mknode($1,mknode("CHAR", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
@@ -361,7 +363,12 @@ expr_list: expr COMMA expr_list {$$=mknode("",$1,mknode(",",$3,NULL));}
 
 paren_expr:OPENPAREN expr_list CLOSEPAREN {$$=$2;};
 //call func rul 
-call_func: IDENTIFIER paren_expr {$$=mknode("Call func",mknode($1,NULL,NULL),mknode("ARGS",$2,NULL));} ;
+call_func: IDENTIFIER paren_expr {$$=mknode("Call func",mknode($1,NULL,NULL),mknode("ARGS",$2,NULL)); 
+addCode($$,NULL,freshVar(),NULL,NULL,NULL);
+		char * x;
+		asprintf(&x,"%s = CALL _%s\n‪\tPopParams ?‬‬‬‬\n",$$->var,$1);
+		addCode($$,mystrcat(x,""),NULL,NULL,NULL,NULL);
+} ;
 %%
 
 
@@ -1205,12 +1212,10 @@ void syntaxMKscope(node *tree,code * CODEscope){
 	{
 		int count=0;
 		findfunc(tree,CODEscope,&count);
-		char * x;
-		asprintf(&x,"%s = CALL _%s\n‪\tPopParams‬‬‬‬ %d\n",tree->var,tree->left->token,count);
-		addCode(tree,gen(tree,x,"","","",""),NULL,NULL,NULL,NULL);
-
-		
-		
+		char * x,*old,*space;
+		space=mkspace(tree->label);
+		asprintf(&x,"%s%s = CALL _%s\n‪\tPopParams‬‬‬‬ %d\n",space,tree->var,tree->left->token,count);
+		firstNode->code=replaceWord(firstNode->code,tree->code,x);
 	}
 	else if(strcmp(tree->token, "CODE") == 0)
 	{
@@ -1306,8 +1311,19 @@ void syntaxMKscope(node *tree,code * CODEscope){
 			printf("ERORR,return cant be in proc %s\n",temp->beforeLVL->func[temp->beforeLVL->countfunc-1]->name);
 			exit(1);
 		}  
-		}  
-
+		}
+		char *x,* space;
+		int i;
+		space=mkspace(tree->label);
+		for(i=0;i<strlen(tree->code);i++)
+			if(strstr(&(tree->code[i]),"return")==NULL)
+				{
+					i--;
+					break;
+				}
+		asprintf(&x,"%s%s",space,&(tree->code[i]));
+		firstNode->code=replaceWord(firstNode->code,tree->code,x);
+		
 	}
 	else if(strcmp(tree->token, "{") == 0)
 	{
@@ -1439,16 +1455,21 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 	}
 	char* mystrcat(char*des,char*src){
 		char* tamp=des;
+		char* num;
+		asprintf(&num,"%d ",line++);
 		if(src!=NULL){
 			if(des==NULL){
 				des=(char*)malloc((strlen(src)+1)*sizeof(char));
-				
 				strcpy(des,src);
 				return des;
 			}
-		des=(char*)malloc((strlen(des)+strlen(src)+1)*sizeof(char));
+		des=(char*)malloc((strlen(des)+strlen(src)+1+strlen(num))*sizeof(char));
 		if(tamp!=NULL){
-		strcpy(des,tamp);
+		if(tamp[0]>='1' && tamp[0]<='9')
+			strcpy(des,"");
+		else
+			strcpy(des,num);
+		strcat(des,tamp);
 		}
 		if(src!=NULL)
 		{
@@ -1457,3 +1478,63 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		}
 		return des;
 	}
+
+char *replaceWord(const char *s, const char *oldW, const char *newW) 
+{ 
+    char *result; 
+    int i, cnt = 0; 
+    int newWlen = strlen(newW); 
+    int oldWlen = strlen(oldW); 
+  
+    // Counting the number of times old word 
+    // occur in the string 
+    for (i = 0; s[i] != '\0'; i++) 
+    { 
+        if (strstr(&s[i], oldW) == &s[i]) 
+        { 
+            cnt++; 
+  
+            // Jumping to index after the old word. 
+            i += oldWlen - 1; 
+        } 
+    } 
+  
+    // Making new string of enough length 
+    result = (char *)malloc(i + cnt * (newWlen - oldWlen) + 1); 
+  
+    i = 0; 
+    while (*s) 
+    { 
+        // compare the substring with the result 
+        if (strstr(s, oldW) == s) 
+        { 
+            strcpy(&result[i], newW); 
+            i += newWlen; 
+            s += oldWlen; 
+        } 
+        else
+            result[i++] = *s++; 
+    } 
+  
+    result[i] = '\0'; 
+    return result; 
+} 
+
+ 
+char * mkspace(char *label)
+{
+	char * msg;
+	if(label==NULL)
+		asprintf(&msg,"\t");
+	else
+		{
+			msg=(char*)malloc(sizeof(char));
+			*msg='\0';
+			while(strlen(label)+strlen(msg)+2)
+			{
+				asprintf(&msg," %s",msg);
+			}
+			asprintf(&msg,"%s%s: ",msg,label);
+		}
+		return msg;
+}
