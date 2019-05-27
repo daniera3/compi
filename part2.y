@@ -135,7 +135,7 @@
  
 project: cmmnt program {firstNode =$2; syntaxMKscope($2,mycode);  }; 
 
-program: procedures main{$$=mknode("CODE",$1,$2);  addCode($$,mystrcat2($1->code,$2->code),NULL,NULL,NULL,NULL);}
+program: procedures main{$$=mknode("CODE",$1,$2);  addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);}
 
  //comments
 cmmnt: COMMENT cmmnt {;}| ;
@@ -145,23 +145,23 @@ main: PROCEDUR MAIN OPENPAREN CLOSEPAREN cmmnt OPENBRACE pro_body CLOSEBRACE
 {
 $$=mknode("Main",mknode("ARGS",NULL,$7),NULL);
 t=l=0;
-addCode($$,mystrcat2("Main:\n",$7->code),NULL,NULL,NULL,NULL);
+addCode($$,mystrcat("Main:\n",$7->code),NULL,NULL,NULL,NULL);
 };
 
 //functions
-procedures: procedures  procedure {$$=mknode("",$1,$2);if($1!=NULL) addCode($$,mystrcat2($1->code,$2->code),NULL,NULL,NULL,NULL);else addCode($$,$2->code,NULL,NULL,NULL,NULL);}
+procedures: procedures  procedure {$$=mknode("",$1,$2);if($1!=NULL) addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);else addCode($$,$2->code,NULL,NULL,NULL,NULL);}
 	| {$$=NULL;};
 
 //function
 procedure: FUNCTION IDENTIFIER OPENPAREN para_pro CLOSEPAREN cmmnt RETURN type_pro  OPENBRACE  pro_body CLOSEBRACE
 { 
 		$$=mknode("FUNC",mknode($2,mknode(" ",NULL,NULL),mknode("ARGS",$4,mknode("Return",$8,NULL))),mknode("",$10,NULL));
-		t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat2(x,$10->code),NULL,NULL,NULL,NULL);
+		t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat(x,$10->code),NULL,NULL,NULL,NULL);
 }
 | PROCEDUR IDENTIFIER OPENPAREN para_pro CLOSEPAREN  OPENBRACE  pro_body CLOSEBRACE
 {
 	$$=mknode("PROC",mknode($2,mknode("",NULL,NULL),NULL),mknode("ARGS",$4,$7));
-	t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat2(x,$7->code),NULL,NULL,NULL,NULL);
+	t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat(x,$7->code),NULL,NULL,NULL,NULL);
 };
 
 
@@ -178,7 +178,7 @@ para_list: var_id COLON type_id {$$=mknode("(",$3,mknode("",$1,mknode(")",NULL,N
 pro_body: cmmnt  procedures declears stmnts 
 {
 	$$=mknode("BODY", mknode(" ",$2,NULL),mknode(" ",$3,mknode(" ",$4,mknode(" ",NULL,NULL))));
-	addCode($$,mystrcat2("\tBeginFunc‬‬\n",$4->code),NULL,NULL,NULL,NULL);
+	addCode($$,mystrcat("\tBeginFunc‬‬\n",$4->code),NULL,NULL,NULL,NULL);
 };
 
 
@@ -220,15 +220,20 @@ type_pro: BOOL {$$=mknode("boolean", NULL, NULL);}
 	
 
 //Statments
-stmnts: stmnts stmnt {$$=mknode("",$1,$2);if($1!=NULL) addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);else addCode($$,$2->code,NULL,NULL,NULL,NULL);} | {$$=NULL;};
+stmnts: stmnts stmnt  {$$=mknode("",$1,$2); if($1!=NULL) addCode($$,mystrcat($1->code,$2->code),NULL,freshLabel(),NULL,NULL);else addCode($$,$2->code,NULL,freshLabel(),NULL,NULL);} | {$$=NULL;};
 
 //stmnt_block
-stmnt_block: stmnt {$$=$1;}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
+stmnt_block: stmnt {$$=$1; addCode($$,NULL,NULL,freshLabel(),NULL,NULL);}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
 
 //new block in stmnts
 new_block: OPENBRACE procedures cmmnt declears stmnts CLOSEBRACE cmmnt
 {
 	$$=mknode("{",$2,mknode("", $4,mknode("", $5,("}",NULL,NULL))));
+	if($5!=NULL)
+	if($5->var!=NULL && $5->code!=NULL)
+	addCode($$,$5->code,$5->var,NULL,NULL,NULL);
+	else if($5->code!=NULL)
+	addCode($$,$5->code,NULL,NULL,NULL,NULL);
 };
 
 //Statment
@@ -237,7 +242,10 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	$$=mknode("if",
 	mknode("(", $3, 
 	mknode(")",NULL,NULL)),$5);
-	addCode($$,"",$1,NULL,NULL,NULL);
+	addCode($3,NULL,NULL,NULL,freshLabel(),NULL);
+	addCode($$,mystrcat(mystrcat($3->code,mystrcat($3->truelabel,": ")),$5->code),NULL,NULL,NULL,NULL);
+	
+	
 }%prec IF
 | IF OPENPAREN expr CLOSEPAREN   stmnt_block    ELSE  stmnt_block  
 {
@@ -246,6 +254,9 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	mknode("",NULL,NULL)),
 	mknode("",$5,
 	mknode("",$7,NULL)));
+
+	addCode($3,NULL,NULL,NULL,freshLabel(),freshLabel());
+
 }
 | WHILE cmmnt OPENPAREN expr CLOSEPAREN  stmnt_block  
 {
@@ -264,7 +275,7 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 | assmnt_stmnt SEMICOLON cmmnt {$$=mknode("",$1,NULL); addCode($$,$1->code,NULL,NULL,NULL,NULL); }
 | expr SEMICOLON cmmnt {$$=$1;}
 | RETURN expr SEMICOLON cmmnt {$$=mknode("return",$2,NULL);addCode($$,mystrcat($2->code,gen($$,"return",$2->var,"","","")),NULL,NULL,NULL,NULL);}
-| new_block {$$=$1;};
+| new_block {$$=$1;} ;
 
 
 
@@ -299,8 +310,9 @@ expr:  OPENPAREN expr CLOSEPAREN {$$=mknode("(",$2,mknode(")",NULL,NULL));addCod
 	| expr GREATER expr {$$=mknode(">",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,">",$3->var)),NULL,NULL,NULL,NULL);}
 	| expr LESSEQL expr {$$=mknode("<=",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"<=",$3->var)),NULL,NULL,NULL,NULL);}
 	| expr LESS expr {$$=mknode("<",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"<",$3->var)),NULL,NULL,NULL,NULL);}
+//relope operator
 	| expr AND expr {$$=mknode("&&",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"&&",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr OR expr {$$=mknode("||",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"||",$3->var)),NULL,NULL,NULL,NULL);}
+	| expr OR expr {$$=mknode("||",$1,$3);addCode($1,NULL,NULL,NULL,$$->truelabel,NULL);}
 //aritmetical operator
 	| expr PLUS expr {$$=mknode("+",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"+",$3->var)),NULL,NULL,NULL,NULL);}
 	| expr MINUS expr {$$=mknode("-",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"-",$3->var)),NULL,NULL,NULL,NULL);}
@@ -368,7 +380,7 @@ call_func: IDENTIFIER paren_expr {$$=mknode("Call func",mknode($1,NULL,NULL),mkn
 addCode($$,NULL,freshVar(),NULL,NULL,NULL);
 		char * x;
 		asprintf(&x,"%s = CALL _%s\n‪\tPopParams ?‬‬‬‬\n",$$->var,$1);
-		addCode($$,mystrcat(x,""),NULL,NULL,NULL,NULL);
+		addCode($$,mystrcat2(x,""),NULL,NULL,NULL,NULL);
 } ;
 %%
 
@@ -1445,7 +1457,7 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 	}
 	char* freshLabel(){
 		char* x;
-		asprintf(&x,"l%d",l++);
+		asprintf(&x,"L%d",l++);
 		return x;
 	}
 	char* gen(node * tree,char*s1,char*s2,char*s3,char*s4,char*s5)
@@ -1454,7 +1466,7 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		asprintf(&x,"%s %s %s %s %s\n",s1,s2,s3,s4,s5);
 		return x;
 	}
-	char* mystrcat(char*des,char*src){
+	char* mystrcat2(char*des,char*src){
 		char* tamp=des;
 		char* num;
 		asprintf(&num,"%d ",line++);
@@ -1466,7 +1478,7 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 			}
 		des=(char*)malloc((strlen(des)+strlen(src)+1+strlen(num))*sizeof(char));
 		if(tamp!=NULL){
-		if(tamp[0]>='1' && tamp[0]<='9')
+		if(tamp[0]>='1' && tamp[0]<='9' )
 			strcpy(des,"");
 		else
 			strcpy(des,num);
@@ -1479,7 +1491,7 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		}
 		return des;
 	}
-char* mystrcat2(char*des,char*src){
+char* mystrcat(char*des,char*src){
 		char* tamp=des;
 		char* num;
 		asprintf(&num,"%d ",line++);
