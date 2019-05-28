@@ -4,6 +4,7 @@
 	#include <stdlib.h>
 	#include <string.h>
 	#include "lex.yy.c"
+	
 
 	typedef enum {false,true}bool;
 	typedef struct node
@@ -15,7 +16,8 @@
 		char *var;
 		char *label;
 		char *truelabel;
-		char *flaselabel;
+		char *falselabel;
+		int sum;
 
 	} node;
 
@@ -79,14 +81,15 @@
 	//part 3
 	static node * firstNode;
 	int POPParams(Arguments * args,int count);
-	void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *flaselabel);
+	void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *falselabel);
 	char* freshVar();
 	char* freshLabel();
-	char* gen(node*,char*,char*,char*,char*,char*);
+	char* gen(char*,char*,char*,char*,char*);
 	char* mystrcat(char*des,char*src);
 	char* mystrcat2(char*des,char*src);
 	char *replaceWord(const char *s, const char *oldW, const char *newW);
 	char * mkspace(char *label);
+	void calc3AC(node * tree);
 	static int t=0;
 	static int l=0;
 	static int line=0;
@@ -133,9 +136,9 @@
 %%
  //Main project
  
-project: cmmnt program {firstNode =$2; syntaxMKscope($2,mycode);  }; 
+project: cmmnt program {firstNode = $2; syntaxMKscope($2,mycode);  calc3AC($2);  }; 
 
-program: procedures main{$$=mknode("CODE",$1,$2);  addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);}
+program: procedures main{$$=mknode("CODE",$1,$2);  }
 
  //comments
 cmmnt: COMMENT cmmnt {;}| ;
@@ -145,23 +148,23 @@ main: PROCEDUR MAIN OPENPAREN CLOSEPAREN cmmnt OPENBRACE pro_body CLOSEBRACE
 {
 $$=mknode("Main",mknode("ARGS",NULL,$7),NULL);
 t=l=0;
-addCode($$,mystrcat("Main:\n",$7->code),NULL,NULL,NULL,NULL);
+
 };
 
 //functions
-procedures: procedures  procedure {$$=mknode("",$1,$2);if($1!=NULL) addCode($$,mystrcat($1->code,$2->code),NULL,NULL,NULL,NULL);else addCode($$,$2->code,NULL,NULL,NULL,NULL);}
+procedures: procedures  procedure {$$=mknode("procedures",$1,$2);}
 	| {$$=NULL;};
 
 //function
 procedure: FUNCTION IDENTIFIER OPENPAREN para_pro CLOSEPAREN cmmnt RETURN type_pro  OPENBRACE  pro_body CLOSEBRACE
 { 
-		$$=mknode("FUNC",mknode($2,mknode(" ",NULL,NULL),mknode("ARGS",$4,mknode("Return",$8,NULL))),mknode("",$10,NULL));
-		t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat(x,$10->code),NULL,NULL,NULL,NULL);
+		$$=mknode("FUNC",mknode($2,mknode("",NULL,NULL),mknode("ARGS",$4,mknode("Return",$8,NULL))),mknode("",$10,NULL));
+		t=l=0; 
 }
 | PROCEDUR IDENTIFIER OPENPAREN para_pro CLOSEPAREN  OPENBRACE  pro_body CLOSEBRACE
 {
 	$$=mknode("PROC",mknode($2,mknode("",NULL,NULL),NULL),mknode("ARGS",$4,$7));
-	t=l=0; char*x; asprintf(&x,"%s:\n",$2);addCode($$,mystrcat(x,$7->code),NULL,NULL,NULL,NULL);
+	t=l=0; 
 };
 
 
@@ -178,7 +181,7 @@ para_list: var_id COLON type_id {$$=mknode("(",$3,mknode("",$1,mknode(")",NULL,N
 pro_body: cmmnt  procedures declears stmnts 
 {
 	$$=mknode("BODY", mknode(" ",$2,NULL),mknode(" ",$3,mknode(" ",$4,mknode(" ",NULL,NULL))));
-	addCode($$,mystrcat("\tBeginFunc‬‬\n",$4->code),NULL,NULL,NULL,NULL);
+	
 };
 
 
@@ -220,21 +223,17 @@ type_pro: BOOL {$$=mknode("boolean", NULL, NULL);}
 	
 
 //Statments
-stmnts: stmnts stmnt  {$$=mknode("",$1,$2); if($1!=NULL) addCode($$,mystrcat($1->code,$2->code),NULL,freshLabel(),NULL,NULL);else addCode($$,$2->code,NULL,freshLabel(),NULL,NULL);} | {$$=NULL;};
+stmnts: stmnts stmnt   { $$=mknode("stmnts",$1,$2);   }| {$$=NULL;};
 
 //stmnt_block
-stmnt_block: stmnt {$$=$1; addCode($$,NULL,NULL,freshLabel(),NULL,NULL);}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
+stmnt_block: stmnt {$$=$1;}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
 
 //new block in stmnts
 new_block: OPENBRACE procedures cmmnt declears stmnts CLOSEBRACE cmmnt
 {
 	$$=mknode("{",$2,mknode("", $4,mknode("", $5,("}",NULL,NULL))));
-	if($5!=NULL)
-	if($5->var!=NULL && $5->code!=NULL)
-	addCode($$,$5->code,$5->var,NULL,NULL,NULL);
-	else if($5->code!=NULL)
-	addCode($$,$5->code,NULL,NULL,NULL,NULL);
-};
+	 if($5) addCode($5,NULL,NULL,freshLabel(),NULL,NULL); 
+}
 
 //Statment
 stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block 
@@ -242,8 +241,8 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	$$=mknode("if",
 	mknode("(", $3, 
 	mknode(")",NULL,NULL)),$5);
+	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
 	addCode($3,NULL,NULL,NULL,freshLabel(),NULL);
-	addCode($$,mystrcat(mystrcat($3->code,mystrcat($3->truelabel,": ")),$5->code),NULL,NULL,NULL,NULL);
 	
 	
 }%prec IF
@@ -254,15 +253,17 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	mknode("",NULL,NULL)),
 	mknode("",$5,
 	mknode("",$7,NULL)));
-
+	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
 	addCode($3,NULL,NULL,NULL,freshLabel(),freshLabel());
-
-}
+	}
 | WHILE cmmnt OPENPAREN expr CLOSEPAREN  stmnt_block  
 {
 	$$=mknode("while",
 	mknode("(", $4, 
 	mknode(")",NULL,NULL)),$6);
+	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
+	addCode($$,NULL,NULL,NULL,freshLabel(),freshLabel());
+
 }
 | FOR cmmnt OPENPAREN assmnt_stmnt SEMICOLON expr SEMICOLON assmnt_stmnt CLOSEPAREN stmnt_block 
 {
@@ -270,11 +271,14 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 			mknode("(",
 			mknode("",$4,$6),
 			mknode("",$8,
-			mknode(")",NULL,NULL))),$10);		
+			mknode(")",NULL,NULL))),$10);	
+			addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
+			addCode($$,NULL,NULL,NULL,freshLabel(),freshLabel());	
+
 }
-| assmnt_stmnt SEMICOLON cmmnt {$$=mknode("",$1,NULL); addCode($$,$1->code,NULL,NULL,NULL,NULL); }
+| assmnt_stmnt SEMICOLON cmmnt {$$=mknode("assmnt_stmnt",$1,NULL);  }
 | expr SEMICOLON cmmnt {$$=$1;}
-| RETURN expr SEMICOLON cmmnt {$$=mknode("return",$2,NULL);addCode($$,mystrcat($2->code,gen($$,"return",$2->var,"","","")),NULL,NULL,NULL,NULL);}
+| RETURN expr SEMICOLON cmmnt {$$=mknode("return",$2,NULL);}
 | new_block {$$=$1;} ;
 
 
@@ -284,7 +288,6 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 assmnt_stmnt: lhs ASSINGMENT expr 
 {
 	$$=mknode("=",$1,$3);
-	addCode($$,mystrcat($3->code,gen($$,mystrcat($1->var,""),"=",$3->var,"","")),NULL,NULL,NULL,NULL);
 };
 
 
@@ -292,65 +295,64 @@ assmnt_stmnt: lhs ASSINGMENT expr
 lhs: IDENTIFIER OPENBRACKET expr CLOSEBRACKET 
 {
 	$$=mknode($1, mknode("[",$3,mknode("]",NULL,NULL)), NULL);
-	char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,$1,fv2,fv1,$3->var); addCode($$,"",mystrcat($3->code,x),mystrcat("*",fv2),NULL,NULL);
+	//char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,$1,fv2,fv1,$3->var); addCode($$,"",mystrcat($3->code,x),mystrcat("*",fv2),NULL,NULL);
 
 } 
-| IDENTIFIER {$$=mknode($1,NULL,NULL);addCode($$,"",$1,NULL,NULL,NULL);}
+| IDENTIFIER {$$=mknode($1,NULL,NULL);}
 | address_expr {$$=$1;}
 | derefrence_expr{$$=$1;} ;
 
 
 	
 //Expresion
-expr:  OPENPAREN expr CLOSEPAREN {$$=mknode("(",$2,mknode(")",NULL,NULL));addCode($$,$2->code,$2->var,NULL,NULL,NULL);}|
+expr:  OPENPAREN expr CLOSEPAREN {$$=mknode("(",$2,mknode(")",NULL,NULL));}|
 //bool oper
-    expr EQL expr {$$=mknode("==",$1,$3); addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"==",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr NOTEQL expr {$$=mknode("!=",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"!=",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr GREATEREQL expr {$$=mknode(">=",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,">=",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr GREATER expr {$$=mknode(">",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,">",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr LESSEQL expr {$$=mknode("<=",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"<=",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr LESS expr {$$=mknode("<",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"<",$3->var)),NULL,NULL,NULL,NULL);}
+    expr EQL expr {$$=mknode("==",$1,$3); }
+	| expr NOTEQL expr {$$=mknode("!=",$1,$3);}
+	| expr GREATEREQL expr {$$=mknode(">=",$1,$3);}
+	| expr GREATER expr {$$=mknode(">",$1,$3);}
+	| expr LESSEQL expr {$$=mknode("<=",$1,$3);}
+	| expr LESS expr {$$=mknode("<",$1,$3);}
 //relope operator
-	| expr AND expr {$$=mknode("&&",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"&&",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr OR expr {$$=mknode("||",$1,$3);addCode($1,NULL,NULL,NULL,$$->truelabel,NULL);}
+	| expr AND expr {$$=mknode("&&",$1,$3); addCode($1,NULL,NULL,NULL,freshLabel(),$$->falselabel); addCode($3,NULL,NULL,NULL,$$->truelabel,$$->falselabel); }
+	| expr OR expr {$$=mknode("||",$1,$3);  addCode($1,NULL,NULL,NULL,$$->truelabel,freshLabel()); addCode($3,NULL,NULL,NULL,$$->truelabel,$$->falselabel); }
 //aritmetical operator
-	| expr PLUS expr {$$=mknode("+",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"+",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr MINUS expr {$$=mknode("-",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"-",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr MULTI expr {$$=mknode("*",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"*",$3->var)),NULL,NULL,NULL,NULL);}
-	| expr DIVISION expr {$$=mknode("/",$1,$3);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat(mystrcat($1->code,$3->code),gen($$,$$->var,"=",$1->var,"/",$3->var)),NULL,NULL,NULL,NULL);}
+	| expr PLUS expr {$$=mknode("+",$1,$3); }
+	| expr MINUS expr {$$=mknode("-",$1,$3); }
+	| expr MULTI expr {$$=mknode("*",$1,$3); }
+	| expr DIVISION expr {$$=mknode("/",$1,$3);}
 //not operator
-	| NOT expr {$$=mknode("!",$2,NULL);addCode($$,NULL,freshVar(),NULL,NULL,NULL); addCode($$,mystrcat($2->code,gen($$,$$->var,"=","!",$2->var,"")),NULL,NULL,NULL,NULL);}
+	| NOT expr {$$=mknode("!",$2,NULL);}
 	| address_expr {$$=$1;}
 	| derefrence_expr {$$=$1;}
 	| call_func cmmnt {$$=$1;}
-	| DECIMAL_LTL {$$=mknode($1,mknode("INT",NULL,NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| HEX_LTL {$$=mknode($1,mknode("HEX", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| CHAR_LTL {$$=mknode($1,mknode("CHAR", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| REAL_LTL {$$=mknode($1,mknode("REAL", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| STRING_LTL {$$=mknode($1,mknode("STRING", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| BOOLFALSE {$$=mknode($1,mknode("BOOLEAN", NULL, NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| BOOLTRUE {$$=mknode($1,mknode("BOOLEAN", NULL, NULL),NULL); addCode($$,"",$1,NULL,NULL,NULL);}
+	| DECIMAL_LTL {$$=mknode($1,mknode("INT",NULL,NULL),NULL);}
+	| HEX_LTL {$$=mknode($1,mknode("HEX", NULL, NULL),NULL);}
+	| CHAR_LTL {$$=mknode($1,mknode("CHAR", NULL, NULL),NULL);}
+	| REAL_LTL {$$=mknode($1,mknode("REAL", NULL, NULL),NULL);}
+	| STRING_LTL {$$=mknode($1,mknode("STRING", NULL, NULL),NULL);}
+	| BOOLFALSE {$$=mknode($1,mknode("BOOLEAN", NULL, NULL),NULL);}
+	| BOOLTRUE {$$=mknode($1,mknode("BOOLEAN", NULL, NULL),NULL); }
 	| LENGTH IDENTIFIER LENGTH 
 	{
 		$$=mknode("|",
 		mknode($2,NULL,NULL),
 		mknode("|",NULL,NULL));
-		//addCode($$,NULL,freshVar(),NULL,NULL,NULL);
+		
 	}
 	| IDENTIFIER OPENBRACKET expr CLOSEBRACKET 
-	{$$=mknode("solovar",mknode($1,mknode("[",$3,mknode("]",NULL,NULL)),NULL),NULL); char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,$1,fv2,fv1,$3->var); addCode($$,mystrcat($3->code,x),mystrcat("*",fv2),NULL,NULL,NULL);}
-	| IDENTIFIER {$$=mknode("solovar",mknode($1,NULL,NULL),NULL);addCode($$,"",$1,NULL,NULL,NULL);}
-	| NULLL {$$=mknode("null",NULL,NULL);addCode($$,"",$1,NULL,NULL,NULL);};
+	{$$=mknode("solovar",mknode($1,mknode("[",$3,mknode("]",NULL,NULL)),NULL),NULL);}
+	| IDENTIFIER {$$=mknode("solovar",mknode($1,NULL,NULL),NULL);}
+	| NULLL {$$=mknode("null",NULL,NULL);};
 
 //address expression like &id
 
 //address_exprs:ADDRESS address_exprs {$$=mknode($1,$2,NULL);} | address_expr {$$=$1;};
 
-address_expr: ADDRESS IDENTIFIER {$$=mknode("&",mknode($2,NULL,NULL),NULL);addCode($$,"",mystrcat("&",$2),NULL,NULL,NULL);}
-	| ADDRESS OPENPAREN IDENTIFIER CLOSEPAREN {$$=mknode("&",mknode("(",mknode($3,NULL,NULL),NULL),mknode(")",NULL,NULL));addCode($$,$3,mystrcat("&",$3),NULL,NULL,NULL);}
+address_expr: ADDRESS IDENTIFIER {$$=mknode("&",mknode($2,NULL,NULL),NULL);}
+	| ADDRESS OPENPAREN IDENTIFIER CLOSEPAREN {$$=mknode("&",mknode("(",mknode($3,NULL,NULL),NULL),mknode(")",NULL,NULL));}
 	| ADDRESS IDENTIFIER OPENBRACKET expr CLOSEBRACKET 
 	{$$=mknode("&", mknode($2,mknode("[",$4,mknode("]",NULL,NULL)),NULL),NULL);
-	char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,$2,fv2,fv1,$4->var); addCode($$,mystrcat($4->code,x),fv2,NULL,NULL,NULL);
 	}
 	| ADDRESS OPENPAREN IDENTIFIER OPENBRACKET expr CLOSEBRACKET CLOSEPAREN 
 	{
@@ -358,7 +360,7 @@ address_expr: ADDRESS IDENTIFIER {$$=mknode("&",mknode($2,NULL,NULL),NULL);addCo
 		mknode("(", 
 		mknode($3,mknode("[",$5,mknode("]",NULL,NULL)),NULL)
 		,mknode(")",NULL,NULL)),NULL);
-		char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,$3,fv2,fv1,$5->var); addCode($$,mystrcat($5->code,x),fv2,NULL,NULL,NULL);
+		//char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,$3,fv2,fv1,$5->var); addCode($$,mystrcat($5->code,x),fv2,NULL,NULL,NULL);
 	};
 //value expression like ^id
 //derefrence_exprs:DEREFRENCE derefrence_exprs {$$=mknode($1,$2,NULL);} | derefrence_expr {$$=$1;};
@@ -377,10 +379,7 @@ expr_list: expr COMMA expr_list {$$=mknode("",$1,mknode(",",$3,NULL));}
 paren_expr:OPENPAREN expr_list CLOSEPAREN {$$=$2;};
 //call func rul 
 call_func: IDENTIFIER paren_expr {$$=mknode("Call func",mknode($1,NULL,NULL),mknode("ARGS",$2,NULL)); 
-addCode($$,NULL,freshVar(),NULL,NULL,NULL);
-		char * x;
-		asprintf(&x,"%s = CALL _%s\n‪\tPopParams ?‬‬‬‬\n",$$->var,$1);
-		addCode($$,mystrcat2(x,""),NULL,NULL,NULL,NULL);
+
 } ;
 %%
 
@@ -881,7 +880,7 @@ node* mknode (char *token, node *left, node *right)
 	newnode->var=NULL;
 	newnode->label=NULL;
 	newnode->truelabel=NULL;
-	newnode->flaselabel=NULL;
+	newnode->falselabel=NULL;
 	return newnode;
 }
 
@@ -1225,11 +1224,8 @@ void syntaxMKscope(node *tree,code * CODEscope){
 	{
 		int count=0;
 		findfunc(tree,CODEscope,&count);
-		char * x,*old,*space;
-		space=mkspace(tree->label);
-		asprintf(&x,"%s%s = CALL _%s\n‪\tPopParams‬‬‬‬ %d\n",space,tree->var,tree->left->token,count);
-		firstNode->code=replaceWord(firstNode->code,tree->code,x);
-	}
+		tree->sum=count;
+	  }
 	else if(strcmp(tree->token, "CODE") == 0)
 	{
 		//Printtree(tree);
@@ -1243,7 +1239,8 @@ void syntaxMKscope(node *tree,code * CODEscope){
 		return;
 	}
     else if(strcmp(tree->token, "BODY") == 0)
-	{     
+	{  
+		 
     }
 	else if(strcmp(tree->token, "ARGS") == 0)
 	{     
@@ -1325,18 +1322,7 @@ void syntaxMKscope(node *tree,code * CODEscope){
 			exit(1);
 		}  
 		}
-		char *x,* space;
-		int i;
-		space=mkspace(tree->label);
-		for(i=0;i<strlen(tree->code);i++)
-			if(strstr(&(tree->code[i]),"return")==NULL)
-				{
-					i--;
-					break;
-				}
-		asprintf(&x,"%s%s",space,&(tree->code[i]));
-		firstNode->code=replaceWord(firstNode->code,tree->code,x);
-		
+
 	}
 	else if(strcmp(tree->token, "{") == 0)
 	{
@@ -1425,15 +1411,25 @@ int POPParams(Arguments * args,int count){
 	return size;
 }
 
-void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *flaselabel)
+void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *falselabel)
 	{
 		if(code!=NULL){
 		node->code=(char*)malloc(sizeof(char)*(1+strlen(code)));
 		strcpy(node->code,code);
 		}
+		else if(node->code==NULL)
+		{
+		node->code=(char*)malloc(sizeof(char));
+		node->code="";
+		}
 		if(var!=NULL){
 		node->var=(char*)malloc(sizeof(char)*(1+strlen(var)));
 		strcpy(node->var,var);
+		}
+		else if(node->var==NULL)
+		{
+		node->var=(char*)malloc(sizeof(char));
+		node->var="";
 		}
 		if(label!=NULL){
 		node->label=(char*)malloc(sizeof(char)*(1+strlen(label)));
@@ -1443,9 +1439,9 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		node->truelabel=(char*)malloc(sizeof(char)*(1+strlen(truelabel)));
 		strcpy(node->truelabel,truelabel);
 		}
-		if(flaselabel!=NULL){
-		node->flaselabel=(char*)malloc(sizeof(char)*(1+strlen(flaselabel)));
-		strcpy(node->flaselabel,flaselabel);
+		if(falselabel!=NULL){
+		node->falselabel=(char*)malloc(sizeof(char)*(1+strlen(falselabel)));
+		strcpy(node->falselabel,falselabel);
 		}
 
 	}
@@ -1460,9 +1456,10 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		asprintf(&x,"L%d",l++);
 		return x;
 	}
-	char* gen(node * tree,char*s1,char*s2,char*s3,char*s4,char*s5)
+	char* gen(char*s1,char*s2,char*s3,char*s4,char*s5)
 	{
 		char* x;
+
 		asprintf(&x,"%s %s %s %s %s\n",s1,s2,s3,s4,s5);
 		return x;
 	}
@@ -1557,17 +1554,294 @@ char *replaceWord(const char *s, const char *oldW, const char *newW)
 char * mkspace(char *label)
 {
 	char * msg;
+	char x=' ';
+	int len = strlen(mystrcat(label,"\0"));
 	if(label==NULL)
 		asprintf(&msg,"\t");
 	else
 		{
-			msg=(char*)malloc(sizeof(char));
-			*msg='\0';
-			while(strlen(label)+strlen(msg)+2)
-			{
-				asprintf(&msg," %s",msg);
-			}
-			asprintf(&msg,"%s%s: ",msg,label);
+		asprintf(&msg,"%c",x);
+		while(len<5){
+			asprintf(&msg,"%c%s",x,msg);
+			len++;
+		}
+		asprintf(&label,"%s: ",mystrcat(label,"\0"));
+		msg=mystrcat(msg,label);
 		}
 		return msg;
+}
+
+
+void calc3AC(node * tree)
+{ 
+	
+	
+	if(strcmp(tree->token, "=") == 0 )
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+       addCode(tree,mystrcat(tree->right->code,gen(mystrcat(tree->left->var,""),"=",tree->right->var,"","")),NULL,NULL,NULL,NULL);   
+	}
+	else if(strcmp(tree->token, "if") == 0)
+	{ 
+		addCode(tree->left->left,NULL,NULL,NULL,NULL,tree->label);
+		addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		addCode(tree,mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->label),tree->right->code)),NULL,NULL,NULL,NULL);
+	}
+
+else if(strcmp(tree->token, "if-else") == 0)
+	{ 
+		
+		addCode(tree->right->left,NULL,NULL,tree->label,NULL,NULL);
+		addCode(tree->right->right->left,NULL,NULL,tree->label,NULL,NULL);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		mystrcat(mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->truelabel),tree->right->left->code))
+		,gen(" goto ",tree->label,"\n",mkspace(tree->left->left->falselabel),tree->right->right->left->code));
+
+	}
+
+	else if(strcmp(tree->token, "while") == 0)
+	{ 
+		
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+			addCode(tree,mystrcat(mystrcat(mystrcat( mkspace(tree->truelabel),tree->left->left->code),gen("ifz",tree->left->left->var," goto ",tree->falselabel,"")),
+				mystrcat(mystrcat(tree->right->code,mystrcat(" goto ",tree->truelabel)),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+		
+	}
+	else if(strcmp(tree->token, "stmnts") == 0)
+	{ 
+		printf("hi \n");
+		if(tree->right!=NULL)
+			addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+			printf("hi \n");
+			if(tree->right!=NULL && tree->left!=NULL)
+				addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->label),tree->right->code)),NULL,NULL,NULL,NULL);
+			else if(tree->right!=NULL)
+				addCode(tree,mystrcat(tree->right->code ,mkspace(tree->right->label)),NULL,NULL,NULL,NULL);
+			else
+				addCode(tree,"",NULL,NULL,NULL,NULL);
+			printf("%s \n",tree->code);
+	return;
+		
+	}
+	else if(strcmp(tree->token, "for") == 0)
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+					addCode(tree,	
+		mystrcat(mystrcat(mystrcat(mystrcat(tree->left->left->left->code, mkspace(tree->truelabel)),tree->left->left->right->code),gen("ifz",tree->left->left->right->var," goto ",tree->falselabel,"")),
+		mystrcat(mystrcat(mystrcat(tree->right->code,tree->left->right->left->code),mystrcat(" goto ",tree->truelabel)),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+	}
+    else if(strcmp(tree->token, "PROC") == 0)
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+	 char*x; asprintf(&x,"%s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->right->code),NULL,NULL,NULL,NULL);
+		return;
+	}
+	else if(strcmp(tree->token, "FUNC") == 0)
+	{printf("hi \n ");
+		 if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		printf("hiw \n ");
+	 char*x; asprintf(&x,"%s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->left->code),NULL,NULL,NULL,NULL);
+		return;
+	}
+	else if(strcmp(tree->token, "Call func") == 0)//TODO
+	{ 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		char * x;
+		addCode(tree,NULL,freshVar(),NULL,NULL,NULL);
+		asprintf(&x,"%s = CALL _%s\n‪\tPopParams %d‬‬‬‬\n",tree->var,tree->left->token,tree->sum);
+		addCode(tree,x,NULL,NULL,NULL,NULL);
+	}
+	else if(strcmp(tree->token, "CODE") == 0)
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		 if(tree->left)
+			addCode(tree,mystrcat(tree->left->code,tree->right->code),NULL,NULL,NULL,NULL);
+		else
+			addCode(tree,tree->right->code,NULL,NULL,NULL,NULL);
+
+	}
+    else if(strcmp(tree->token, "BODY") == 0)
+	{ 
+		printf("lll \n");
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		if(tree->right->right->left){
+		printf("%s \n",tree->right->right->left->code);
+		if(tree->right->right->left->code[strlen(mystrcat(tree->right->right->left->code,"\0"))-2]==':')
+			addCode(tree,mystrcat(mystrcat("\tBeginFunc‬‬\n",tree->right->right->left->code),"EndFunc\n"),NULL,NULL,NULL,NULL);
+		else
+		    addCode(tree,mystrcat(mystrcat("\tBeginFunc‬‬\n",tree->right->right->left->code),"\tEndFunc\n"),NULL,NULL,NULL,NULL);
+		}
+		else
+			 addCode(tree,mystrcat("\tBeginFunc‬‬\n","\tEndFunc\n"),NULL,NULL,NULL,NULL);
+		printf("lllw \n");
+	}
+    else if(strcmp(tree->token, "Main") == 0)
+	{ 
+		 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		
+		addCode(tree,mystrcat("Main:\n",tree->left->right->code),NULL,NULL,NULL,NULL);
+          return;   
+    } 
+	    else if(strcmp(tree->token, "procedures") == 0)
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		if(tree->left!=NULL) addCode(tree,mystrcat(tree->left->code,tree->right->code),NULL,NULL,NULL,NULL);else addCode(tree,tree->right->code,NULL,NULL,NULL,NULL);
+    return;
+	}        
+
+	else if(strcmp(tree->token, "return") == 0)
+	{
+		printf("lol \n ");
+		 if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+printf("lolw \n ");
+		addCode(tree,mystrcat(tree->left->code,gen("return",tree->left->var,"","","")),NULL,NULL,NULL,NULL);
+	}
+	else if(strcmp(tree->token, "{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);") == 0)
+	{ 
+		if(tree->right->right->left) addCode(tree,NULL,NULL,tree->right->right->left->label,tree->right->right->left->truelabel,tree->right->right->left->falselabel); 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		if(tree->right->right->left) addCode(tree,tree->right->right->left->code,tree->right->right->left->var,NULL,NULL,NULL); 			
+	}
+	else if(strcmp(tree->token, "}") == 0)
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+                      
+                      
+    }
+	else if(strcmp(tree->token, "assmnt_stmnt") == 0)
+	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+                     addCode(tree,tree->left->code,tree->left->var,tree->left->label,tree->left->truelabel,tree->left->falselabel); 
+                      
+    }
+	
+    else if(strcmp(tree->token, "+") == 0 || 
+            strcmp(tree->token, "*") == 0 || 
+            strcmp(tree->token, "-") == 0 || 
+            strcmp(tree->token, "/") == 0 )
+	{ 
+		
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		addCode(tree,NULL,freshVar(),NULL,NULL,NULL);
+		addCode(tree,mystrcat(mystrcat(tree->left->code,tree->right->code),gen(tree->var,"=",tree->left->var,tree->token,tree->right->var)),NULL,NULL,NULL,NULL);
+    }
+    
+	else if(strcmp(tree->token, "&") == 0)
+	{ 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+				if((tree->left->left == NULL))
+				addCode(tree,"",mystrcat("&",(tree->left->token)),NULL,NULL,NULL);
+			else if(strcmp(tree->left->left->token,"[")==0)
+					{
+						char *x,*fv1,*fv2;
+						asprintf(&fv1,"%s",freshVar()); 
+						asprintf(&fv2,"%s",freshVar());
+						asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,tree->left->token,fv2,fv1,tree->left->left->left->var);
+						addCode(tree,mystrcat(tree->left->left->left->code,x),fv2,NULL,NULL,NULL);
+					}
+				else if (tree->left->left->left==NULL)
+				addCode(tree,"",mystrcat("&",(tree->left->left->token)),NULL,NULL,NULL);
+			else
+			{
+				char *x,*fv1,*fv2;
+				asprintf(&fv1,"%s",freshVar());
+				asprintf(&fv2,"%s",freshVar()); 
+				asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,tree->left->left->token,fv2,fv1,tree->left->left->left->left->var); 
+				addCode(tree,mystrcat(tree->left->left->left->left->code,x),fv2,NULL,NULL,NULL);
+			}
+			
+			
+
+	}
+	else if(strcmp(tree->token, "^") == 0 )
+	{ 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+			if((tree->left->left == NULL))
+				addCode(tree,"",mystrcat("*",(tree->left->token)),NULL,NULL,NULL);
+			else
+			{
+				addCode(tree,"",mystrcat("*",(tree->left->left->token)),NULL,NULL,NULL);
+			}
+			
+	}
+	else if(strcmp(tree->token, "==") == 0 || 
+			strcmp(tree->token, ">") == 0 || 
+			strcmp(tree->token, ">=") == 0 || 
+			strcmp(tree->token, "<") == 0 || 
+			strcmp(tree->token, "<=") == 0 || 
+			strcmp(tree->token, "!=") == 0) 
+	{ 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+				addCode(tree,mystrcat(gen("if",tree->left->var,tree->token,tree->right->var,mystrcat(" goto ",mkspace(tree->truelabel)))
+				,mystrcat(" goto ",mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+
+				
+	}
+	else if(strcmp(tree->token, "(") == 0)
+	{
+			addCode(tree->left,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		addCode(tree,tree->left->code,tree->left->var,NULL,NULL,NULL);
+	}
+	else if(strcmp(tree->token, "!") == 0)
+	{ 
+		addCode(tree->left,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+				
+		 addCode(tree,tree->left->code,NULL,NULL,NULL,NULL);
+		
+	}
+	else if(strcmp(tree->token, "||") == 0) 
+	{
+		addCode(tree->left,NULL,NULL,NULL,tree->truelabel,NULL);
+		addCode(tree->right,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->falselabel),tree->right->code)),NULL,NULL,NULL,NULL);
+	}
+	else if(strcmp(tree->token, "&&") == 0 )
+	{
+		addCode(tree->left,NULL,NULL,NULL,NULL,tree->falselabel);
+		addCode(tree->right,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+			addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->falselabel),tree->right->code)),NULL,NULL,NULL,NULL);
+	}
+	else if(strcmp(tree->token, "null") == 0 )
+	{ 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		addCode(tree,"",tree->token,NULL,NULL,NULL);
+	}	
+	else if(strcmp(tree->token, "solovar") == 0 )
+	{ 
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+			if(tree->left->left==NULL)
+				addCode(tree,"",tree->left->token,NULL,NULL,NULL);
+			else
+			{
+				char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,tree->left->token,fv2,fv1,tree->left->left->left->var); addCode(tree,mystrcat(tree->left->left->left->code,x),mystrcat("*",fv2),NULL,NULL,NULL);
+			}
+			
+	}
+	else if((tree->left!=NULL)&&
+			(strcmp(tree->left->token,"INT")==0||
+			strcmp(tree->left->token,"HEX")==0||
+			strcmp(tree->left->token,"CHAR")==0||
+			strcmp(tree->left->token,"REAL")==0||
+			strcmp(tree->left->token,"STRING")==0||
+			strcmp(tree->left->token,"BOOLEAN")==0))
+			{
+			if(strcmp(tree->left->token,"STRING")==0||
+			strcmp(tree->left->token,"BOOLEAN")==0)
+			addCode(tree,tree->token,tree->token,NULL,NULL,NULL);
+			else
+			addCode(tree,"",tree->token,NULL,NULL,NULL);
+
+			}
+	else if(strcmp(tree->token, ")") == 0||strcmp(tree->token, "") == 0)
+	if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+	else
+	{
+	
+	if (tree->left) 
+		calc3AC(tree->left);
+	
+	if (tree->right)
+		calc3AC(tree->right);
+	}
+
 }
