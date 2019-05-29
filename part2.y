@@ -241,7 +241,6 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	$$=mknode("if",
 	mknode("(", $3, 
 	mknode(")",NULL,NULL)),$5);
-	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
 	addCode($3,NULL,NULL,NULL,freshLabel(),NULL);
 	
 	
@@ -253,7 +252,7 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	mknode("",NULL,NULL)),
 	mknode("",$5,
 	mknode("",$7,NULL)));
-	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
+	
 	addCode($3,NULL,NULL,NULL,freshLabel(),freshLabel());
 }
 | WHILE cmmnt OPENPAREN expr CLOSEPAREN  stmnt_block  
@@ -261,7 +260,6 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	$$=mknode("while",
 	mknode("(", $4, 
 	mknode(")",NULL,NULL)),$6);
-	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
 	addCode($$,NULL,NULL,NULL,freshLabel(),freshLabel());
 
 }
@@ -272,7 +270,6 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 			mknode("",$4,$6),
 			mknode("",$8,
 			mknode(")",NULL,NULL))),$10);	
-			addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
 			addCode($$,NULL,NULL,NULL,freshLabel(),freshLabel());	
 
 }
@@ -372,8 +369,8 @@ address_expr: ADDRESS IDENTIFIER {$$=mknode("&",mknode($2,NULL,NULL),NULL);}
 	};
 
 	//list of expreession
-expr_list: expr COMMA expr_list {$$=mknode("",$1,mknode(",",$3,NULL));} 
-	| expr {$$=mknode("",$1,NULL);}
+expr_list: expr COMMA expr_list {$$=mknode("expr_list",$1,mknode(",",$3,NULL));} 
+	| expr {$$=mknode("expr_list",$1,NULL);}
 	| {$$=NULL;};
 
 paren_expr:OPENPAREN expr_list CLOSEPAREN {$$=$2;};
@@ -1431,15 +1428,15 @@ void addCode(node* node,char *code,char *var,char *label,char *truelabel,char *f
 		node->var=(char*)malloc(sizeof(char));
 		node->var="";
 		}
-		if(label!=NULL){
+		if(label!=NULL&& node->label==NULL){
 		node->label=(char*)malloc(sizeof(char)*(1+strlen(label)));
 		strcpy(node->label,label);
 		}
-		if(truelabel!=NULL){
+		if(truelabel!=NULL && node->truelabel==NULL){
 		node->truelabel=(char*)malloc(sizeof(char)*(1+strlen(truelabel)));
 		strcpy(node->truelabel,truelabel);
 		}
-		if(falselabel!=NULL){
+		if(falselabel!=NULL && node->falselabel==NULL){
 		node->falselabel=(char*)malloc(sizeof(char)*(1+strlen(falselabel)));
 		strcpy(node->falselabel,falselabel);
 		}
@@ -1595,7 +1592,7 @@ void calc3AC(node * tree)
 else if(strcmp(tree->token, "if-else") == 0)
 	{ 
 		if(tree->right->left)
-		addCode(tree->right->left,NULL,NULL,tree->label,NULL,NULL);
+		addCode(tree->right->left,NULL,NULL,tree->label,NULL,NULL);			
 		if(tree->right->right->left)
 		addCode(tree->right->right->left,NULL,NULL,tree->label,NULL,NULL);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1657,12 +1654,25 @@ else if(strcmp(tree->token, "if-else") == 0)
 	 char*x; asprintf(&x," %s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->left->code),NULL,NULL,NULL,NULL);
 		return;
 	}
-	else if(strcmp(tree->token, "Call func") == 0)//TODO
-	{ 
+		else if(strcmp(tree->token, "expr_list") == 0)
+	{
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-		char * x;
+			if(tree->right==NULL)
+				addCode(tree,mystrcat(tree->left->code,mystrcat("PushParam ",mystrcat(tree->left->var,"\n"))),NULL,NULL,NULL,NULL);
+			else
+				addCode(tree,mystrcat(mystrcat(tree->left->code,mystrcat("PushParam ",mystrcat(tree->left->var,"\n"))),tree->right->left->code),NULL,NULL,NULL,NULL);
+	}	
+	else if(strcmp(tree->token, "Call func") == 0)
+	{ 
+
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		char * x,*parm=(char*)malloc(sizeof(char));
+		if(tree->right->left==NULL)
+			strcpy(parm,"");
+		else
+			parm=tree->right->left->code;
 		addCode(tree,NULL,freshVar(),NULL,NULL,NULL);
-		asprintf(&x,"%s = CALL _%s\n‪\tPopParams %d‬‬‬‬\n",tree->var,tree->left->token,tree->sum);
+		asprintf(&x,"%s%s = CALL _%s\n‪\tPopParams %d‬‬‬‬\n",parm,tree->var,tree->left->token,tree->sum);
 		addCode(tree,x,NULL,NULL,NULL,NULL);
 		return;
 	}
@@ -1805,7 +1815,9 @@ else if(strcmp(tree->token, "if-else") == 0)
 			strcmp(tree->token, "<=") == 0 || 
 			strcmp(tree->token, "!=") == 0) 
 	{ 
+
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+				
 				addCode(tree,mystrcat(gen("if",tree->left->var,tree->token,tree->right->var,mystrcat("goto ",mystrcat(tree->truelabel,"\n")))
 				,mystrcat("\tgoto ",mystrcat(tree->falselabel,"\n"))),NULL,NULL,NULL,NULL);
 
@@ -1834,6 +1846,7 @@ else if(strcmp(tree->token, "if-else") == 0)
 	return;}
 	else if(strcmp(tree->token, "&&") == 0 )
 	{
+		
 		addCode(tree->left,NULL,NULL,NULL,NULL,tree->falselabel);
 		addCode(tree->right,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1871,12 +1884,14 @@ else if(strcmp(tree->token, "if-else") == 0)
 			else
 			addCode(tree,"",tree->token,NULL,NULL,NULL);
 			return;}
-	else if(strcmp(tree->token, ")") == 0||strcmp(tree->token, "") == 0||strcmp(tree->token, " ") == 0)
+	else if(strcmp(tree->token, "") == 0||strcmp(tree->token, " ") == 0)
 	{
 		
 		if(tree->left)
+		//if(tree->left->label==NULL&&tree->left->truelabel&&tree->left->falselabel==NULL)
 		addCode(tree->left,NULL,NULL,tree->label,tree->truelabel,tree->falselabel);
 		if(tree->right)
+			//if(tree->right->label==NULL&&tree->right->truelabel&&tree->right->falselabel==NULL)
 		addCode(tree->right,NULL,NULL,tree->label,tree->truelabel,tree->falselabel);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		if(tree->left && tree->right)
