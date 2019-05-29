@@ -223,10 +223,10 @@ type_pro: BOOL {$$=mknode("boolean", NULL, NULL);}
 	
 
 //Statments
-stmnts: stmnts stmnt   { $$=mknode("stmnts",$1,$2);   }| {$$=NULL;};
+stmnts: stmnts stmnt   { $$=mknode("stmnts",$1,$2); addCode($2,NULL,NULL,freshLabel(),NULL,NULL);   }| {$$=NULL;};
 
 //stmnt_block
-stmnt_block: stmnt {$$=$1;}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
+stmnt_block: stmnt {$$=$1; addCode($1,NULL,NULL,freshLabel(),NULL,NULL);}|declear {$$=$1;}|procedure {$$=$1;} |SEMICOLON  {$$=mknode("",NULL,NULL);};
 
 //new block in stmnts
 new_block: OPENBRACE procedures cmmnt declears stmnts CLOSEBRACE cmmnt
@@ -255,7 +255,7 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	mknode("",$7,NULL)));
 	addCode($$,NULL,NULL,freshLabel(),NULL,NULL);
 	addCode($3,NULL,NULL,NULL,freshLabel(),freshLabel());
-	}
+}
 | WHILE cmmnt OPENPAREN expr CLOSEPAREN  stmnt_block  
 {
 	$$=mknode("while",
@@ -390,8 +390,8 @@ int main()
 	int x= yyparse();
 	if(x==0)
 	{
-	printf("syntax valid\n"); 
-	printf("Semantics valid\n");
+	printf(" syntax valid\n"); 
+	printf(" Semantics valid\n");
 	}
 	printf("%s",firstNode->code);
 	return x;
@@ -1557,7 +1557,8 @@ char * mkspace(char *label)
 	char x=' ';
 	int len = strlen(mystrcat(label,"\0"));
 	if(label==NULL)
-		asprintf(&msg,"\t");
+		//asprintf(&msg,"\t");
+		msg="";
 	else
 		{
 		asprintf(&msg,"%c",x);
@@ -1578,7 +1579,8 @@ void calc3AC(node * tree)
 	
 	if(strcmp(tree->token, "=") == 0 )
 	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-       addCode(tree,mystrcat(tree->right->code,gen(mystrcat(tree->left->var,""),"=",tree->right->var,"","")),NULL,NULL,NULL,NULL);   
+	   addCode(tree,mystrcat(tree->right->code,gen(tree->left->var,"=",tree->right->var,"","")),NULL,NULL,NULL,NULL); 
+	   return;  
 	}
 	else if(strcmp(tree->token, "if") == 0)
 	{ 
@@ -1586,60 +1588,61 @@ void calc3AC(node * tree)
 		addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->label),tree->right->code)),NULL,NULL,NULL,NULL);
+		return;
 	}
-
 else if(strcmp(tree->token, "if-else") == 0)
 	{ 
-		
+		if(tree->right->left)
 		addCode(tree->right->left,NULL,NULL,tree->label,NULL,NULL);
+		if(tree->right->right->left)
 		addCode(tree->right->right->left,NULL,NULL,tree->label,NULL,NULL);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-		mystrcat(mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->truelabel),tree->right->left->code))
-		,gen(" goto ",tree->label,"\n",mkspace(tree->left->left->falselabel),tree->right->right->left->code));
-
+		addCode(tree,mystrcat(mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->truelabel),tree->right->left->code))
+		,gen("goto ",tree->label,"\n",mkspace(tree->left->left->falselabel),tree->right->right->left->code)),NULL,NULL,NULL,NULL);
+	return;
 	}
 
 	else if(strcmp(tree->token, "while") == 0)
 	{ 
 		
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-			addCode(tree,mystrcat(mystrcat(mystrcat( mkspace(tree->truelabel),tree->left->left->code),gen("ifz",tree->left->left->var," goto ",tree->falselabel,"")),
-				mystrcat(mystrcat(tree->right->code,mystrcat(" goto ",tree->truelabel)),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
-		
+			addCode(tree,mystrcat(mystrcat(mystrcat( mkspace(tree->truelabel),tree->left->left->code),gen("ifz",tree->left->left->var,"goto ",tree->falselabel,"")),
+				mystrcat(mystrcat(tree->right->code,mystrcat("\tgoto ",mystrcat(tree->truelabel,"\n"))),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+		return ;
 	}
 	else if(strcmp(tree->token, "stmnts") == 0)
 	{ 
-		printf("hi \n");
+		
 		if(tree->right!=NULL)
 			addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-			printf("hi \n");
+		
 			if(tree->right!=NULL && tree->left!=NULL)
 				addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->label),tree->right->code)),NULL,NULL,NULL,NULL);
 			else if(tree->right!=NULL)
 				addCode(tree,mystrcat(tree->right->code ,mkspace(tree->right->label)),NULL,NULL,NULL,NULL);
 			else
 				addCode(tree,"",NULL,NULL,NULL,NULL);
-			printf("%s \n",tree->code);
+			
 	return;
 		
 	}
 	else if(strcmp(tree->token, "for") == 0)
 	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 					addCode(tree,	
-		mystrcat(mystrcat(mystrcat(mystrcat(tree->left->left->left->code, mkspace(tree->truelabel)),tree->left->left->right->code),gen("ifz",tree->left->left->right->var," goto ",tree->falselabel,"")),
-		mystrcat(mystrcat(mystrcat(tree->right->code,tree->left->right->left->code),mystrcat(" goto ",tree->truelabel)),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+		mystrcat(mystrcat(mystrcat(mystrcat(tree->left->left->left->code, mkspace(tree->truelabel)),tree->left->left->right->code),gen("ifz",tree->left->left->right->var,"goto ",tree->falselabel,"\n")),
+		mystrcat(mystrcat(mystrcat(tree->right->code,tree->left->right->left->code),mystrcat("\tgoto ",mystrcat(tree->truelabel,"\n"))),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
 	}
     else if(strcmp(tree->token, "PROC") == 0)
 	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-	 char*x; asprintf(&x,"%s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->right->code),NULL,NULL,NULL,NULL);
+	 char*x; asprintf(&x," %s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->right->code),NULL,NULL,NULL,NULL);
 		return;
 	}
 	else if(strcmp(tree->token, "FUNC") == 0)
-	{printf("hi \n ");
+	{
 		 if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-		printf("hiw \n ");
-	 char*x; asprintf(&x,"%s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->left->code),NULL,NULL,NULL,NULL);
+		
+	 char*x; asprintf(&x," %s:\n",tree->left->token);addCode(tree,mystrcat(x,tree->right->left->code),NULL,NULL,NULL,NULL);
 		return;
 	}
 	else if(strcmp(tree->token, "Call func") == 0)//TODO
@@ -1649,6 +1652,7 @@ else if(strcmp(tree->token, "if-else") == 0)
 		addCode(tree,NULL,freshVar(),NULL,NULL,NULL);
 		asprintf(&x,"%s = CALL _%s\n‪\tPopParams %d‬‬‬‬\n",tree->var,tree->left->token,tree->sum);
 		addCode(tree,x,NULL,NULL,NULL,NULL);
+		return;
 	}
 	else if(strcmp(tree->token, "CODE") == 0)
 	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1656,14 +1660,32 @@ else if(strcmp(tree->token, "if-else") == 0)
 			addCode(tree,mystrcat(tree->left->code,tree->right->code),NULL,NULL,NULL,NULL);
 		else
 			addCode(tree,tree->right->code,NULL,NULL,NULL,NULL);
+		tree->code=replaceWord(tree->code, "\n\n", "\n") ;
+		char x='a',*y,*z;
 
+		while (x<='z')
+		{
+			asprintf(&y,"\n%c",x);
+			asprintf(&z,"\n\t%c",x);
+			tree->code=replaceWord(tree->code, y, z) ;
+			x++;
+		}
+		x='A';
+				while (x<='Z')
+		{
+			asprintf(&y,"\n%c",x);
+			asprintf(&z,"\n\t%c",x);
+			tree->code=replaceWord(tree->code, y, z) ;
+			x++;
+		}
+		return;
 	}
     else if(strcmp(tree->token, "BODY") == 0)
 	{ 
-		printf("lll \n");
+		
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		if(tree->right->right->left){
-		printf("%s \n",tree->right->right->left->code);
+		
 		if(tree->right->right->left->code[strlen(mystrcat(tree->right->right->left->code,"\0"))-2]==':')
 			addCode(tree,mystrcat(mystrcat("\tBeginFunc‬‬\n",tree->right->right->left->code),"EndFunc\n"),NULL,NULL,NULL,NULL);
 		else
@@ -1671,14 +1693,15 @@ else if(strcmp(tree->token, "if-else") == 0)
 		}
 		else
 			 addCode(tree,mystrcat("\tBeginFunc‬‬\n","\tEndFunc\n"),NULL,NULL,NULL,NULL);
-		printf("lllw \n");
+		
+		return;
 	}
     else if(strcmp(tree->token, "Main") == 0)
 	{ 
 		 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		
-		addCode(tree,mystrcat("Main:\n",tree->left->right->code),NULL,NULL,NULL,NULL);
+		addCode(tree,mystrcat(" Main:\n",tree->left->right->code),NULL,NULL,NULL,NULL);
           return;   
     } 
 	    else if(strcmp(tree->token, "procedures") == 0)
@@ -1689,16 +1712,18 @@ else if(strcmp(tree->token, "if-else") == 0)
 
 	else if(strcmp(tree->token, "return") == 0)
 	{
-		printf("lol \n ");
+		
 		 if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-printf("lolw \n ");
+
 		addCode(tree,mystrcat(tree->left->code,gen("return",tree->left->var,"","","")),NULL,NULL,NULL,NULL);
+		return;
 	}
 	else if(strcmp(tree->token, "{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);") == 0)
 	{ 
 		if(tree->right->right->left) addCode(tree,NULL,NULL,tree->right->right->left->label,tree->right->right->left->truelabel,tree->right->right->left->falselabel); 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-		if(tree->right->right->left) addCode(tree,tree->right->right->left->code,tree->right->right->left->var,NULL,NULL,NULL); 			
+		if(tree->right->right->left) addCode(tree,tree->right->right->left->code,tree->right->right->left->var,NULL,NULL,NULL); 
+		return;			
 	}
 	else if(strcmp(tree->token, "}") == 0)
 	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1708,6 +1733,7 @@ printf("lolw \n ");
 	else if(strcmp(tree->token, "assmnt_stmnt") == 0)
 	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
                      addCode(tree,tree->left->code,tree->left->var,tree->left->label,tree->left->truelabel,tree->left->falselabel); 
+					 return;
                       
     }
 	
@@ -1720,7 +1746,7 @@ printf("lolw \n ");
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,NULL,freshVar(),NULL,NULL,NULL);
 		addCode(tree,mystrcat(mystrcat(tree->left->code,tree->right->code),gen(tree->var,"=",tree->left->var,tree->token,tree->right->var)),NULL,NULL,NULL,NULL);
-    }
+    return;}
     
 	else if(strcmp(tree->token, "&") == 0)
 	{ 
@@ -1748,7 +1774,7 @@ printf("lolw \n ");
 			
 			
 
-	}
+	return;}
 	else if(strcmp(tree->token, "^") == 0 )
 	{ 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1759,7 +1785,7 @@ printf("lolw \n ");
 				addCode(tree,"",mystrcat("*",(tree->left->left->token)),NULL,NULL,NULL);
 			}
 			
-	}
+	return;}
 	else if(strcmp(tree->token, "==") == 0 || 
 			strcmp(tree->token, ">") == 0 || 
 			strcmp(tree->token, ">=") == 0 || 
@@ -1768,17 +1794,17 @@ printf("lolw \n ");
 			strcmp(tree->token, "!=") == 0) 
 	{ 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-				addCode(tree,mystrcat(gen("if",tree->left->var,tree->token,tree->right->var,mystrcat(" goto ",mkspace(tree->truelabel)))
-				,mystrcat(" goto ",mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+				addCode(tree,mystrcat(gen("if",tree->left->var,tree->token,tree->right->var,mystrcat("goto ",mystrcat(tree->truelabel,"\n")))
+				,mystrcat("\tgoto ",mystrcat(tree->falselabel,"\n"))),NULL,NULL,NULL,NULL);
 
 				
-	}
+	return;}
 	else if(strcmp(tree->token, "(") == 0)
 	{
 			addCode(tree->left,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,tree->left->code,tree->left->var,NULL,NULL,NULL);
-	}
+	return;}
 	else if(strcmp(tree->token, "!") == 0)
 	{ 
 		addCode(tree->left,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
@@ -1786,26 +1812,26 @@ printf("lolw \n ");
 				
 		 addCode(tree,tree->left->code,NULL,NULL,NULL,NULL);
 		
-	}
+	return;}
 	else if(strcmp(tree->token, "||") == 0) 
 	{
 		addCode(tree->left,NULL,NULL,NULL,tree->truelabel,NULL);
 		addCode(tree->right,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->falselabel),tree->right->code)),NULL,NULL,NULL,NULL);
-	}
+	return;}
 	else if(strcmp(tree->token, "&&") == 0 )
 	{
 		addCode(tree->left,NULL,NULL,NULL,NULL,tree->falselabel);
 		addCode(tree->right,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 			addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->falselabel),tree->right->code)),NULL,NULL,NULL,NULL);
-	}
+	return;}
 	else if(strcmp(tree->token, "null") == 0 )
 	{ 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,"",tree->token,NULL,NULL,NULL);
-	}	
+	return;}	
 	else if(strcmp(tree->token, "solovar") == 0 )
 	{ 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1816,7 +1842,7 @@ printf("lolw \n ");
 				char *x,*fv1,*fv2; asprintf(&fv1,"%s",freshVar()); asprintf(&fv2,"%s",freshVar()); asprintf(&x,"\t%s = &%s\n\t%s = %s + %s\n",fv1,tree->left->token,fv2,fv1,tree->left->left->left->var); addCode(tree,mystrcat(tree->left->left->left->code,x),mystrcat("*",fv2),NULL,NULL,NULL);
 			}
 			
-	}
+	return;}
 	else if((tree->left!=NULL)&&
 			(strcmp(tree->left->token,"INT")==0||
 			strcmp(tree->left->token,"HEX")==0||
@@ -1831,17 +1857,21 @@ printf("lolw \n ");
 			else
 			addCode(tree,"",tree->token,NULL,NULL,NULL);
 
-			}
+			return;}
 	else if(strcmp(tree->token, ")") == 0||strcmp(tree->token, "") == 0)
-	if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+	;
 	else
 	{
-	
+	addCode(tree,"",tree->token,NULL,NULL,NULL);
 	if (tree->left) 
 		calc3AC(tree->left);
 	
 	if (tree->right)
 		calc3AC(tree->right);
-	}
-
+	return;}
+	if (tree->left) 
+		calc3AC(tree->left);
+	
+	if (tree->right)
+		calc3AC(tree->right);
 }
