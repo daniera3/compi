@@ -115,8 +115,8 @@
 %token <string> MAIN IDENTIFIER SEMICOLON COMMA OPENPAREN CLOSEPAREN OPENBRACKET CLOSEBRACKET OPENBRACE CLOSEBRACE
 %token <string> DECIMAL_LTL HEX_LTL BOOLTRUE BOOLFALSE  REAL REALPTR FUNCTION COLON  DEREFRENCE 
 
-%left IDENTIFIER
-%left  NOTEQL LESS LESSEQL GREATEREQL GREATER OR AND 
+%left IDENTIFIER OR AND 
+%left  NOTEQL LESS LESSEQL GREATEREQL GREATER 
 %left PLUS MINUS RETURN
 %left MULTI DIVISION
 %left SEMICOLON EQL
@@ -147,7 +147,7 @@ cmmnt: COMMENT cmmnt {;}| ;
 main: PROCEDUR MAIN OPENPAREN CLOSEPAREN cmmnt OPENBRACE pro_body CLOSEBRACE
 {
 $$=mknode("Main",mknode("ARGS",NULL,$7),NULL);
-t=l=0;
+t=0;
 
 };
 
@@ -159,12 +159,12 @@ procedures: procedures  procedure {$$=mknode("procedures",$1,$2);}
 procedure: FUNCTION IDENTIFIER OPENPAREN para_pro CLOSEPAREN cmmnt RETURN type_pro  OPENBRACE  pro_body CLOSEBRACE
 { 
 		$$=mknode("FUNC",mknode($2,mknode("",NULL,NULL),mknode("ARGS",$4,mknode("Return",$8,NULL))),mknode("",$10,NULL));
-		t=l=0; 
+		t=0; 
 }
 | PROCEDUR IDENTIFIER OPENPAREN para_pro CLOSEPAREN  OPENBRACE  pro_body CLOSEBRACE
 {
 	$$=mknode("PROC",mknode($2,mknode("",NULL,NULL),NULL),mknode("ARGS",$4,$7));
-	t=l=0; 
+	t=0; 
 };
 
 
@@ -1584,7 +1584,9 @@ void calc3AC(node * tree)
 	}
 	else if(strcmp(tree->token, "if") == 0)
 	{ 
+		if(tree->left->left)
 		addCode(tree->left->left,NULL,NULL,NULL,NULL,tree->label);
+		if(tree->right)
 		addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->label),tree->right->code)),NULL,NULL,NULL,NULL);
@@ -1604,6 +1606,10 @@ else if(strcmp(tree->token, "if-else") == 0)
 
 	else if(strcmp(tree->token, "while") == 0)
 	{ 
+		if(tree->left->left)
+			addCode(tree->left->left,NULL,NULL,NULL,NULL,tree->label);
+		if(tree->right)
+			addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
 		
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 			addCode(tree,mystrcat(mystrcat(mystrcat( mkspace(tree->truelabel),tree->left->left->code),gen("ifz",tree->left->left->var,"goto ",tree->falselabel,"")),
@@ -1628,7 +1634,13 @@ else if(strcmp(tree->token, "if-else") == 0)
 		
 	}
 	else if(strcmp(tree->token, "for") == 0)
-	{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+	{ 
+		if(tree->left->left->right)
+			addCode(tree->left->left->right,NULL,NULL,NULL,NULL,tree->label);
+		if(tree->right)
+			addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
+		
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 					addCode(tree,	
 		mystrcat(mystrcat(mystrcat(mystrcat(tree->left->left->left->code, mkspace(tree->truelabel)),tree->left->left->right->code),gen("ifz",tree->left->left->right->var,"goto ",tree->falselabel,"\n")),
 		mystrcat(mystrcat(mystrcat(tree->right->code,tree->left->right->left->code),mystrcat("\tgoto ",mystrcat(tree->truelabel,"\n"))),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
@@ -1718,7 +1730,7 @@ else if(strcmp(tree->token, "if-else") == 0)
 		addCode(tree,mystrcat(tree->left->code,gen("return",tree->left->var,"","","")),NULL,NULL,NULL,NULL);
 		return;
 	}
-	else if(strcmp(tree->token, "{ if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);") == 0)
+	else if(strcmp(tree->token, "{") == 0)
 	{ 
 		if(tree->right->right->left) addCode(tree,NULL,NULL,tree->right->right->left->label,tree->right->right->left->truelabel,tree->right->right->left->falselabel); 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
@@ -1851,23 +1863,38 @@ else if(strcmp(tree->token, "if-else") == 0)
 			strcmp(tree->left->token,"STRING")==0||
 			strcmp(tree->left->token,"BOOLEAN")==0))
 			{
+
+			if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 			if(strcmp(tree->left->token,"STRING")==0||
 			strcmp(tree->left->token,"BOOLEAN")==0)
 			addCode(tree,tree->token,tree->token,NULL,NULL,NULL);
 			else
 			addCode(tree,"",tree->token,NULL,NULL,NULL);
-
 			return;}
-	else if(strcmp(tree->token, ")") == 0||strcmp(tree->token, "") == 0)
-	;
+	else if(strcmp(tree->token, ")") == 0||strcmp(tree->token, "") == 0||strcmp(tree->token, " ") == 0)
+	{
+		
+		if(tree->left)
+		addCode(tree->left,NULL,NULL,tree->label,tree->truelabel,tree->falselabel);
+		if(tree->right)
+		addCode(tree->right,NULL,NULL,tree->label,tree->truelabel,tree->falselabel);
+		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
+		if(tree->left && tree->right)
+			addCode(tree,mystrcat(tree->left->code,tree->right->code),tree->right->var,NULL,NULL,NULL);
+		else if(tree->left)
+			addCode(tree,tree->left->code,tree->left->var,NULL,NULL,NULL);	
+		else if(tree->right)
+			addCode(tree,tree->right->code,tree->right->var,NULL,NULL,NULL);	
+	return;
+	}
 	else
 	{
-	addCode(tree,"",tree->token,NULL,NULL,NULL);
 	if (tree->left) 
 		calc3AC(tree->left);
 	
 	if (tree->right)
 		calc3AC(tree->right);
+addCode(tree,"",tree->token,NULL,NULL,NULL);
 	return;}
 	if (tree->left) 
 		calc3AC(tree->left);
