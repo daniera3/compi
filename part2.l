@@ -66,8 +66,8 @@ Main {yylval.string= strdup(yytext);return MAIN;}
 
   /*Literl*/
 return {return RETURN;}
-true {return BOOLTRUE;}
-false {return BOOLFALSE;}
+true {yylval.string= strdup(yytext);return BOOLTRUE;}
+false {yylval.string= strdup(yytext);return BOOLFALSE;}
 [a-zA-Z][a-zA-Z0-9_]* { yylval.string= strdup(yytext);return IDENTIFIER;}
 "\""[^"]*"\"" {yylval.string= strdup(yytext);return STRING_LTL;}
 \'.\' {yylval.string= strdup(yytext);return CHAR_LTL;}

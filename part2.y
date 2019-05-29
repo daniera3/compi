@@ -260,8 +260,9 @@ stmnt: IF OPENPAREN expr CLOSEPAREN  stmnt_block
 	$$=mknode("while",
 	mknode("(", $4, 
 	mknode(")",NULL,NULL)),$6);
-	addCode($$,NULL,NULL,NULL,freshLabel(),freshLabel());
 
+	addCode($$,NULL,NULL,NULL,freshLabel(),freshLabel());
+	printf("%s\n %s\n",$$->falselabel,$$->truelabel);
 }
 | FOR cmmnt OPENPAREN assmnt_stmnt SEMICOLON expr SEMICOLON assmnt_stmnt CLOSEPAREN stmnt_block 
 {
@@ -311,8 +312,8 @@ expr:  OPENPAREN expr CLOSEPAREN {$$=mknode("(",$2,mknode(")",NULL,NULL));}|
 	| expr LESSEQL expr {$$=mknode("<=",$1,$3);}
 	| expr LESS expr {$$=mknode("<",$1,$3);}
 //relope operator
-	| expr AND expr {$$=mknode("&&",$1,$3); addCode($1,NULL,NULL,NULL,freshLabel(),$$->falselabel); addCode($3,NULL,NULL,NULL,$$->truelabel,$$->falselabel); }
-	| expr OR expr {$$=mknode("||",$1,$3);  addCode($1,NULL,NULL,NULL,$$->truelabel,freshLabel()); addCode($3,NULL,NULL,NULL,$$->truelabel,$$->falselabel); }
+	| expr AND expr {$$=mknode("&&",$1,$3); addCode($1,NULL,NULL,NULL,freshLabel(),NULL); }
+	| expr OR expr {$$=mknode("||",$1,$3); addCode($1,NULL,NULL,NULL,NULL,freshLabel());  }
 //aritmetical operator
 	| expr PLUS expr {$$=mknode("+",$1,$3); }
 	| expr MINUS expr {$$=mknode("-",$1,$3); }
@@ -1586,7 +1587,7 @@ void calc3AC(node * tree)
 		if(tree->right)
 		addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-		addCode(tree,mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->label),tree->right->code)),NULL,NULL,NULL,NULL);
+		addCode(tree,mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->label),mystrcat(mkspace(tree->left->left->truelabel),tree->right->code))),NULL,NULL,NULL,NULL);
 		return;
 	}
 else if(strcmp(tree->token, "if-else") == 0)
@@ -1594,23 +1595,26 @@ else if(strcmp(tree->token, "if-else") == 0)
 		if(tree->right->left)
 		addCode(tree->right->left,NULL,NULL,tree->label,NULL,NULL);			
 		if(tree->right->right->left)
-		addCode(tree->right->right->left,NULL,NULL,tree->label,NULL,NULL);
+		addCode(tree->right->right->left,NULL,NULL,tree->label,NULL,tree->label);
+		if(tree->right->left)
+		addCode(tree->right->left,NULL,NULL,tree->label,NULL,tree->label);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
 		addCode(tree,mystrcat(mystrcat(tree->left->left->code,mystrcat(mkspace(tree->left->left->truelabel),tree->right->left->code))
-		,gen("goto ",tree->label,"\n",mkspace(tree->left->left->falselabel),tree->right->right->left->code)),NULL,NULL,NULL,NULL);
+		,mystrcat(gen("goto ",tree->label,"\n",mkspace(tree->left->left->falselabel),tree->right->right->left->code),mkspace(tree->label))),NULL,NULL,NULL,NULL);
 	return;
 	}
 
 	else if(strcmp(tree->token, "while") == 0)
 	{ 
 		if(tree->left->left)
-			addCode(tree->left->left,NULL,NULL,NULL,NULL,tree->label);
+			addCode(tree->left->left,NULL,NULL,NULL,tree->falselabel,tree->label);
 		if(tree->right)
 			addCode(tree->right,NULL,NULL,tree->label,NULL,NULL);
 		
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-			addCode(tree,mystrcat(mystrcat(mystrcat( mkspace(tree->truelabel),tree->left->left->code),gen("ifz",tree->left->left->var,"goto ",tree->falselabel,"")),
-				mystrcat(mystrcat(tree->right->code,mystrcat("\tgoto ",mystrcat(tree->truelabel,"\n"))),mkspace(tree->falselabel))),NULL,NULL,NULL,NULL);
+			
+			addCode(tree,mystrcat(mystrcat(mystrcat( mkspace(tree->truelabel),tree->left->left->code),mkspace(tree->falselabel)),
+				mystrcat(tree->right->code,mystrcat("\tgoto ",mystrcat(tree->truelabel,"\n")))),NULL,NULL,NULL,NULL);
 		return ;
 	}
 	else if(strcmp(tree->token, "stmnts") == 0)
@@ -1817,9 +1821,8 @@ else if(strcmp(tree->token, "if-else") == 0)
 	{ 
 
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-				
-				addCode(tree,mystrcat(gen("if",tree->left->var,tree->token,tree->right->var,mystrcat("goto ",mystrcat(tree->truelabel,"\n")))
-				,mystrcat("\tgoto ",mystrcat(tree->falselabel,"\n"))),NULL,NULL,NULL,NULL);
+				addCode(tree,mystrcat(mystrcat(tree->left->code,tree->right->code),mystrcat(gen("if",tree->left->var,tree->token,tree->right->var,mystrcat("goto ",mystrcat(tree->truelabel,"\n")))
+				,mystrcat("\tgoto ",mystrcat(tree->falselabel,"\n")))),NULL,NULL,NULL,NULL);
 
 				
 	return;}
@@ -1850,7 +1853,7 @@ else if(strcmp(tree->token, "if-else") == 0)
 		addCode(tree->left,NULL,NULL,NULL,NULL,tree->falselabel);
 		addCode(tree->right,NULL,NULL,NULL,tree->truelabel,tree->falselabel);
 		if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-			addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->falselabel),tree->right->code)),NULL,NULL,NULL,NULL);
+			addCode(tree,mystrcat(tree->left->code,mystrcat(mkspace(tree->left->truelabel),tree->right->code)),NULL,NULL,NULL,NULL);
 	return;}
 	else if(strcmp(tree->token, "null") == 0 )
 	{ 
@@ -1878,9 +1881,18 @@ else if(strcmp(tree->token, "if-else") == 0)
 			{
 
 			if(tree->left!=NULL) calc3AC(tree->left); if(tree->right!=NULL) calc3AC(tree->right);
-			if(strcmp(tree->left->token,"STRING")==0||
-			strcmp(tree->left->token,"BOOLEAN")==0)
+			if(strcmp(tree->left->token,"STRING")==0)
+			addCode(tree,"",tree->token,NULL,NULL,NULL);
+			else
+			if(strcmp(tree->left->token,"BOOLEAN")==0)
+			{
+			if(strcmp(tree->token,"true")==0 && tree->truelabel!=NULL)	
+			addCode(tree,mystrcat("goto ",mystrcat(tree->truelabel,"\n")),tree->token,NULL,NULL,NULL);
+			else if(strcmp(tree->token,"false")==0 && tree->falselabel!=NULL)
+			addCode(tree,mystrcat("goto ",mystrcat(tree->falselabel,"\n")),tree->token,NULL,NULL,NULL);
+			else
 			addCode(tree,tree->token,tree->token,NULL,NULL,NULL);
+			}
 			else
 			addCode(tree,"",tree->token,NULL,NULL,NULL);
 			return;}
